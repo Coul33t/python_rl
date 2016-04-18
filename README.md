@@ -1,2 +1,2 @@
 # python_rl
-Python roguelike, made with libtcod library.
+Python roguelike, made with the tdl library.
