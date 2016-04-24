@@ -3,6 +3,8 @@ import sys
 sys.path.append('/usr/local/lib/python3.4/dist-packages') 
 
 import tdl
+import random as rn
+import math
 import pdb
 
 CONSOLE_WIDTH = 80
@@ -17,13 +19,26 @@ DUNGEON_DISPLAY_HEIGHT = CONSOLE_HEIGHT-MESSAGE_HEIGHT
 PANEL_WIDTH = CONSOLE_WIDTH - DUNGEON_DISPLAY_WIDTH
 PANEL_HEIGHT = CONSOLE_HEIGHT - MESSAGE_HEIGHT
 
-MAP_WIDTH = 200
-MAP_HEIGHT = 200
+MAP_WIDTH = DUNGEON_DISPLAY_WIDTH
+MAP_HEIGHT = DUNGEON_DISPLAY_HEIGHT
+
+MIN_ROOM = 5
+MAX_ROOM = 30
+MIN_ROOM_SIZE = 5
+MAX_ROOM_SIZE = 15
+
+FOV_ALGO = 0
+FOV_LIGHT_WALLS = True
+TORCH_RADIUS = 20
+
 
 light_gray = (150,150,150)
 white = (255,255,255)
 light_red = (255,100,100)
 light_blue = (100,100,255)
+
+NOT_VISIBLE_COLORS = {'.': (100,100,100), '#': (50,50,50)}
+VISIBLE_COLORS = {'.': (200,200,200), '#': (150,150,150)}
 
 MOVEMENT_KEYS = {'KP5': [0,0], 'KP2': [0,1], 'KP1': [-1,1], 'KP4': [-1,0], 'KP7': [-1,-1], 'KP8': [0,-1], 'KP9': [1,-1], 'KP6': [1,0], 'KP3': [1,1]}
 GAME_STATE = 'main_menu'
@@ -74,6 +89,14 @@ class Rect():
 	y2 = property(_get_y2, _set_y2)
 
 
+	def get_center(self):
+		return ((int)((self._x1 + self._x2)/2),(int)((self._y1 + self._y2)/2))
+
+	def intersect(self, other_rect):
+		return (self._x1 <= other_rect.x2 and self._x2 >= other_rect.x1 and
+				self._y1 <= other_rect.y2 and self._y2 >= other_rect.y1)
+
+
 
 
 
@@ -96,6 +119,14 @@ class Tile:
 
 	ch = property(_get_ch, _set_ch)
 
+
+	def _get_explored(self):
+		return self._explored
+
+	def _set_explored(self, explored):
+		self._explored = explored
+
+	explored = property(_get_explored, _set_explored)
 	
 	def _get_blocked(self):
 		return self._blocked
@@ -131,7 +162,7 @@ class Map:
 	def __init__(self,width,height):
 		self._width = width
 		self._height = height
-		self._map_array = [[Tile('#', color = light_gray) for x in range(width)] for y in range(height)]
+		self._map_array = [[Tile('#', color = light_gray) for y in range(height)] for x in range(width)]
 
 	def _get_width(self):
 		return self._width
@@ -157,31 +188,101 @@ class Map:
 
 	map_array = property(_get_map_array, _set_map_array)
 
+
+	def is_visible_tile(x, y):
+		x = int(x)
+		y = int(y)
+
+		if x >= MAP_WIDTH or x < 0:
+			return False
+
+		elif y >= MAP_HEIGHT or y < 0:
+			return False
+
+		elif self._map_array[x][y].blocked:
+			return False
+
+		elif self._map_array[x][y].block_sight:
+			return False
+
+		else:
+			return True
 	
 	def create_room(self, room):
-		for x in range(room.x1 + 1, room.x2):
-			for y in range(room.y1 + 1, room.y2):
+		for x in range(room.x1, room.x2):
+			for y in range(room.y1, room.y2):
+				self._map_array[x][y].ch = '.'
 				self._map_array[x][y].blocked = False
 				self._map_array[x][y].block_sight = False
 
 	def carve_h_tunnel(self, x1, x2, y):
-		for x in range(x1, x2):
+		for x in range(min(x1, x2), max(x1,x2) + 1):
+			self._map_array[x][y].ch = '.'
 			self._map_array[x][y].blocked = False
 			self._map_array[x][y].block_sight = False
 
 	def carve_v_tunnel(self, y1, y2, x):
-		for y in range(y1, y2):
+		for y in range(min(y1, y2), max(y1, y2) + 1):
+			self._map_array[x][y].ch = '.'
 			self._map_array[x][y].blocked = False
 			self._map_array[x][y].block_sight = False
 
 	def create_map(self):
-		room1 = Rect(2,2,10,10)
-		room2 = Rect(14,14,20,20)
-		self.create_room(room1)
-		self.create_room(room2)
-		self.carve_h_tunnel(6, 23, 6)
-		self.carve_v_tunnel(6, 17, 23)
+		rooms = []
+		num_rooms = 0
 
+		while num_rooms < MAX_ROOM:
+
+			if num_rooms >= MIN_ROOM:
+				if rn.random() <= (num_rooms - MIN_ROOM)/(MAX_ROOM - MIN_ROOM):
+					break
+
+			carved = False
+			
+			while not carved:
+				
+				carved = True
+
+				w = rn.randint(MIN_ROOM_SIZE, MAX_ROOM_SIZE)
+				h = rn.randint(MIN_ROOM_SIZE, MAX_ROOM_SIZE)
+				x = rn.randint(1, MAP_WIDTH - w - 1)
+				y = rn.randint(1, MAP_HEIGHT - h - 1)
+
+				new_room = Rect(x, y, w, h)
+
+				if rooms:
+					for other_room in rooms:
+						if new_room.intersect(other_room):
+							carved = False
+				else:
+					carved = True
+
+			self.create_room(new_room)
+			(new_x, new_y) = new_room.get_center()
+
+			if num_rooms == 0:
+				player.x = new_x
+				player.y = new_y
+			
+			else:
+				closest_room = [-1,-1]
+				for i, other_room in enumerate(rooms):
+					if closest_room == [-1,-1]:
+						closest_room = list(other_room.get_center())
+					else:
+						if math.sqrt(pow(other_room.x1 - x, 2) + pow(other_room.y1 - y, 2)) < math.sqrt(pow(closest_room[0] - x, 2) + pow(closest_room[1] - y, 2)):
+							closest_room = list(other_room.get_center())
+
+				if rn.random() > 0.5:
+					self.carve_h_tunnel(x, closest_room[0], y)
+					self.carve_v_tunnel(y, closest_room[1], closest_room[0])
+				else:
+					self.carve_v_tunnel(y, closest_room[1], x)
+					self.carve_h_tunnel(x, closest_room[0], closest_room[1])
+
+
+			rooms.append(new_room)
+			num_rooms += 1
 
 
 
@@ -235,7 +336,7 @@ class Object():
 
 
 class Hero(Object):
-	def __init__(self, x, y, color=white):
+	def __init__(self, x=0, y=0, color=white):
 		Object.__init__(self, x, y, '@', color)
 
 	def move(self, delta):
@@ -248,6 +349,8 @@ class Hero(Object):
 
 
 def handle_keys(player):
+	global fov_recompute
+
 	user_input = tdl.event.key_wait()
 
 	if user_input.type == 'KEYDOWN':
@@ -258,19 +361,36 @@ def handle_keys(player):
 		if user_input.type == 'KEYDOWN':
 			if user_input.key in MOVEMENT_KEYS:
 				player.move(MOVEMENT_KEYS[user_input.key])
+				fov_recompute = True
 
 
 
 
-def render_all(player):
+def render_all():
 	#render map
 	#tiles
+
+	global fov_recompute, player, game_map, fov_map
+	visible_tiles = []
+
+	if(fov_recompute):
+		fov_recompute = False
+
+		#visible_tiles = tdl.game_map.quickFOV(player.w, player.y, game_map.is_visible_tile, radius = TORCH_RADIUS, lightWalls = FOV_LIGHT_WALLS)
+		visible_tiles_iter = fov_map.compute_fov(player.x, player.y, radius = TORCH_RADIUS, light_walls = FOV_LIGHT_WALLS)
+
+		for tile in visible_tiles_iter:
+			visible_tiles.append(tile)
+
+	
 	for x in range(DUNGEON_DISPLAY_WIDTH):
 		for y in range(DUNGEON_DISPLAY_HEIGHT):
-			if not game_map.map_array[x][y].blocked:
-				map_console.draw_char(x, y, '.', fg = game_map.map_array[x][y].color)
+			if (x,y) in visible_tiles:
+				game_map.map_array[tile[0]][tile[1]].explored = True
+				map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg = VISIBLE_COLORS[game_map.map_array[x][y].ch])
 			else:
-				map_console.draw_char(x, y, '#', fg = game_map.map_array[x][y].color)
+				if game_map.map_array[x][y].explored:
+					map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg = NOT_VISIBLE_COLORS[game_map.map_array[x][y].ch])
 
 
 	#entities
@@ -311,8 +431,12 @@ def render_all(player):
 
 
 # GLOBAL VARIABLES DECLARATIONS
+player = Hero()
 entities = []
 game_map = Map(MAP_WIDTH,MAP_HEIGHT)
+fov_map = tdl.map.Map(MAP_WIDTH,MAP_HEIGHT)
+
+fov_recompute = True
 
 tdl.set_font('terminal16x16_gs_ro.png')
 console = tdl.init(CONSOLE_WIDTH,CONSOLE_HEIGHT)
@@ -322,8 +446,14 @@ message = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
 def main():
 
-	player = Hero(10, 10)
 	game_map.create_map()
+	
+	global fov_map
+	
+	for x,y in fov_map:
+		fov_map.transparent[x,y] = not game_map.map_array[x][y].block_sight
+		fov_map.walkable[x,y] = not game_map.map_array[x][y].blocked
+	
 
 	# Main screen
 	for x in range(DUNGEON_DISPLAY_WIDTH):
@@ -342,7 +472,7 @@ def main():
 	GAME_STATE = 'playing'
 
 	while not tdl.event.isWindowClosed():
-		render_all(player)
+		render_all()
 
 		# Update the window
 		tdl.flush()
