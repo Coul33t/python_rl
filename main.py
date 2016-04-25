@@ -201,14 +201,16 @@ class Map:
 
         return False
 
+    # Why don't we define an infinite cost if a monster is there ?
+    # Well, if we do so, the aStar alogirhtm basically compute the cost of
+    # ALL reachable tiles in the map, without finding a path. So it takes a
+    # SHITLOAD amount of time per turn, which is not acceptable. However, if
+    # we simply ignore monsters, the current monster WILL go towards the
+    # player, and won't be able to move when he encounter one ; still, the path
+    # will be computed MUCH faster.
     def move_cost(self, x, y):
         if self.map_array[x][y].blocked:
             return 0
-
-        for entity in entities:
-            if entity.blocks and entity.x == x and entity.y == y:
-                return 0
-
         else:
             return 1
 
