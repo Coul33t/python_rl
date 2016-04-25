@@ -224,9 +224,9 @@ class Map:
             y = rn.randint(room.y1, room.y2 - 1)
 
             if(rn.random() < 0.8):
-                monster = Object(x, y, 'g', name='Genestealer', color=(0, 75, 0), class_name=Fighter(), ai=BasicMonster())
+                monster = Object(x, y, 'g', name='Genestealer', color=(0, 75, 0), class_name=Fighter(death_function=monster_death), ai=BasicMonster())
             else:
-                monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(), ai=BasicMonster())
+                monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(death_function=monster_death), ai=BasicMonster())
 
             entities.append(monster)
 
@@ -308,7 +308,7 @@ class Map:
             num_rooms += 1
 
 
-class Object():
+class Object:
     def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, blocks=True, class_name=None, ai=None):
         self._x = x
         self._y = y
@@ -406,12 +406,13 @@ class Object():
 
         # We check for entities where we wanna go
         for entity in entities:
-            if entity.x == new_x and entity.y == new_y:
+            if entity.class_name and entity.x == new_x and entity.y == new_y:
                 target = entity
 
         # If there's one, we attack
         if target is not None:
-            print('The {} dodge your attack !'.format(target.name))
+            if target.class_name is not None:
+                player.class_name.attack(target)
 
         # Else we move
         else:
@@ -428,6 +429,13 @@ class Object():
     def distance_to(self, other):
         return round(math.sqrt((other.x - self._x)**2 + (other.y - self._y)**2))
 
+    # Put it at the beginning of the list, so that it'll be overwritted by others on the same tiles
+    def send_to_back(self):
+        global entities
+
+        entities.remove(self)
+        entities.insert(0, self)
+
     def draw(self, visible_tiles):
         global map_console
 
@@ -436,11 +444,14 @@ class Object():
 
 
 class Fighter:
-    def __init__(self, hp=10, defense=0, dmg=2):
+    def __init__(self, hp=10, defense=0, dmg=2, death_function=None):
         self._hp = hp
         self._max_hp = hp
         self._defense = defense
         self._dmg = dmg
+
+        self._death_function = death_function
+
 
     def _get_max_hp(self):
         return self._max_hp
@@ -474,9 +485,40 @@ class Fighter:
 
     dmg = property(_get_dmg, _set_dmg)
 
+    def _get_death_function(self):
+        return self._death_function
+
+    def _set_death_function(self, death_function):
+        self._death_function = death_function
+
+    death_function = property(_get_death_function, _set_death_function)
+
+
+    def take_damage(self, damage):
+        if damage > 0:
+            self._hp -= damage
+
+        if self._hp <= 0:
+            print('KILLING BLOW ! {} over-damage.'.format(abs(self._hp)))
+            function = self.death_function
+
+            if function is not None:
+                function(self.owner)
+
+
+    def attack(self, target):
+        damage = self.dmg - target.class_name.defense
+
+        if damage > 0:
+            print('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)))
+            target.class_name.take_damage(damage)
+
+        else:
+            print('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name))
+
 
 # TODO: last seen player
-class BasicMonster():
+class BasicMonster:
     global visible_tiles, player, game_map, a_star
 
     def take_turn(self):
@@ -490,7 +532,28 @@ class BasicMonster():
                     monster.move_towards(new_path[0][0], new_path[0][1])
 
             else:
-                print('The {} attacks doesn\'t scratch you !'.format(monster.name))
+                monster.class_name.attack(player)
+
+
+def player_death(player):
+    global game_state
+
+    print('You died.')
+    game_state = 'dead'
+
+    player.ch = 0x1E
+    player.color = (100,0,0)
+
+
+def monster_death(monster):
+    print('The {} died.'.format(monster.name))
+    monster.ch = '%'
+    monster.color = (100,0,0)
+    monster.blocks = False
+    monster.class_name = None
+    monster.ai = None
+    monster.name = 'Remains of ' + monster.name + '.'
+    monster.send_to_back()
 
 
 def handle_keys():
@@ -514,9 +577,6 @@ def handle_keys():
 
 
 def render_all():
-    # render map
-    # tiles
-
     global fov_recompute, player, game_map, fov_map, visible_tiles
     visible_tiles = []
 
@@ -573,7 +633,7 @@ def render_all():
 
 
 # GLOBAL VARIABLES DECLARATIONS
-player = Object(x=0, y=0, ch='@', name='You', class_name=Fighter(hp=30, defense=2, dmg=5))
+player = Object(x=0, y=0, ch='@', name='Player', class_name=Fighter(hp=30, defense=2, dmg=5))
 entities = []
 game_map = Map(MAP_WIDTH, MAP_HEIGHT)
 fov_map = tdl.map.Map(MAP_WIDTH, MAP_HEIGHT)
@@ -629,7 +689,8 @@ def main():
 
         elif game_state == 'playing' and player_action != 'didnt_take_turn':
             for entity in entities:
-                entity.ai.take_turn()
+                if entity.ai is not None:
+                    entity.ai.take_turn()
 
 
 if __name__ == '__main__':
