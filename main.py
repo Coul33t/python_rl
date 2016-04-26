@@ -41,6 +41,8 @@ light_blue = (100, 100, 255)
 NOT_VISIBLE_COLORS = {'.': (35, 17, 5), '#': (50, 50, 50)}
 VISIBLE_COLORS = {'.': (139, 69, 19), '#': (150, 150, 150)}
 
+BAR_WIDTH = 10
+
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
 
@@ -205,14 +207,23 @@ class Map:
     # Well, if we do so, the aStar alogirhtm basically compute the cost of
     # ALL reachable tiles in the map, without finding a path. So it takes a
     # SHITLOAD amount of time per turn, which is not acceptable. However, if
-    # we simply ignore monsters, the current monster WILL go towards the
-    # player, and won't be able to move when he encounter one ; still, the path
-    # will be computed MUCH faster.
+    # we simply add a high cost for monsters, the current monster WILL go
+    # towards the player, and won't be able to move when he encounter another
+    # monster ; still, the path will be computed MUCH faster. The cost is
+    # set to 10, so that it will still circle around other monsters to get to
+    # the player.
+    #
+    # Basically : if it can't directly reach the player, it will only try 10
+    # tiles around itself, instead of the whole map.
     def move_cost(self, x, y):
         if self.map_array[x][y].blocked:
             return 0
         else:
-            return 1
+            for entity in entities:
+                if entity.blocks and entity.x == x and entity.y == y:
+                    return 10
+
+        return 1
 
     def place_monsters(self, room):
         global entities
@@ -418,12 +429,11 @@ class Object:
         else:
             self.move(delta)
 
-    # TODO : be sure of that
     def move_towards(self, target_x, target_y):
 
         dx = target_x - self._x
         dy = target_y - self._y
-        distance = math.sqrt(dx**2 + dy**2)
+
         self.move((dx, dy))
 
     def distance_to(self, other):
@@ -444,14 +454,15 @@ class Object:
 
 
 class Fighter:
-    def __init__(self, hp=10, defense=0, dmg=2, death_function=None):
+    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, death_function=None):
         self._hp = hp
         self._max_hp = hp
+        self._stamina = stamina
+        self._max_stamina = stamina
         self._defense = defense
         self._dmg = dmg
 
         self._death_function = death_function
-
 
     def _get_max_hp(self):
         return self._max_hp
@@ -468,6 +479,22 @@ class Fighter:
         self._hp = hp
 
     hp = property(_get_hp, _set_hp)
+
+    def _get_stamina(self):
+        return self._stamina
+
+    def _set_stamina(self, stamina):
+        self._stamina = stamina
+
+    stamina = property(_get_stamina, _set_stamina)
+
+    def _get_max_stamina(self):
+        return self._max_stamina
+
+    def _set_max_stamina(self, max_stamina):
+        self._max_stamina = max_stamina
+
+    max_stamina = property(_get_max_stamina, _set_max_stamina)
 
     def _get_defense(self):
         return self._defense
@@ -493,7 +520,6 @@ class Fighter:
 
     death_function = property(_get_death_function, _set_death_function)
 
-
     def take_damage(self, damage):
         if damage > 0:
             self._hp -= damage
@@ -504,7 +530,6 @@ class Fighter:
 
             if function is not None:
                 function(self.owner)
-
 
     def attack(self, target):
         damage = self.dmg - target.class_name.defense
@@ -542,13 +567,13 @@ def player_death(player):
     game_state = 'dead'
 
     player.ch = 0x1E
-    player.color = (100,0,0)
+    player.color = (100, 0, 0)
 
 
 def monster_death(monster):
     print('The {} died.'.format(monster.name))
     monster.ch = '%'
-    monster.color = (100,0,0)
+    monster.color = (150, 0, 0)
     monster.blocks = False
     monster.class_name = None
     monster.ai = None
@@ -574,6 +599,21 @@ def handle_keys():
 
     else:
         return 'didnt_take_turn'
+
+
+def render_bar(target_console, x, y, total_width, name, value, maximum, bar_color, empty_color):
+    bar_width = int(float(value) / maximum * total_width)
+
+    if name is not 'X':
+        target_console.draw_rect(x, y, total_width, 1, 0xB0, fg = empty_color)
+
+
+        if bar_width > 0:
+            target_console.draw_rect(x, y, bar_width, 1, 0xB0, fg = bar_color)
+
+
+        target_console.draw_str(PANEL_WIDTH - 3, y, str(value), fg = bar_color)
+
 
 
 def render_all():
@@ -608,12 +648,27 @@ def render_all():
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
     # render player panel
+    panel.draw_str(1, 0, 'HP', fg=(75,255,75))
+    render_bar(panel, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, (75,255,75), (20,80,20))
+
+    try:
+        render_bar(panel, 4, 1, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
+        panel.draw_str(1, 1, 'MN', fg=(75,75,255))
+    except AttributeError:
+        render_bar(panel, 4, 1, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+
+    try:
+        render_bar(panel, 4, 2, BAR_WIDTH, 'ST', player.class_name.stamina, player.class_name.max_stamina, (255,255,75), (80,80,20))
+        panel.draw_str(1, 2, 'ST', fg=(255,255,75))
+    except AttributeError:
+        render_bar(panel, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+
+
+
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
             if x == 0:
                 panel.draw_char(x, y, 0xBA, fg=white)
-            else:
-                panel.draw_char(x, y, 'X', fg=light_red)
 
     console.blit(panel, DUNGEON_DISPLAY_WIDTH, 0, CONSOLE_WIDTH, CONSOLE_HEIGHT)
 
@@ -625,9 +680,6 @@ def render_all():
                     message.draw_char(x, y, 0xCA, fg=white)
                 else:
                     message.draw_char(x, y, 0xCD, fg=white)
-
-            else:
-                message.draw_char(x, y, 'X', fg=light_blue)
 
     console.blit(message, 0, DUNGEON_DISPLAY_HEIGHT, MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
@@ -667,8 +719,8 @@ def main():
         for y in range(DUNGEON_DISPLAY_HEIGHT):
             console.draw_char(x, y, ' ')
 
-    console.drawStr(2, 2, "Press any key")
-    console.drawStr(2, 3, "to start")
+    console.draw_str(2, 2, "Press any key")
+    console.draw_str(2, 3, "to start")
 
     tdl.flush()
 
