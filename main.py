@@ -4,6 +4,7 @@ import sys
 import tdl
 import random as rn
 import math
+import textwrap
 import pdb
 
 sys.path.append('/usr/local/lib/python3.4/dist-packages')
@@ -235,9 +236,9 @@ class Map:
             y = rn.randint(room.y1, room.y2 - 1)
 
             if(rn.random() < 0.8):
-                monster = Object(x, y, 'g', name='Genestealer', color=(0, 75, 0), class_name=Fighter(death_function=monster_death), ai=BasicMonster())
+                monster = Object(x, y, 'g', name='Genestealer', color=(0, 75, 0), class_name=Fighter(dmg=rn.randint(1,3), death_function=monster_death), ai=BasicMonster())
             else:
-                monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(death_function=monster_death), ai=BasicMonster())
+                monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(dmg=rn.randint(3,10), death_function=monster_death), ai=BasicMonster())
 
             entities.append(monster)
 
@@ -525,7 +526,6 @@ class Fighter:
             self._hp -= damage
 
         if self._hp <= 0:
-            print('KILLING BLOW ! {} over-damage.'.format(abs(self._hp)))
             function = self.death_function
 
             if function is not None:
@@ -534,12 +534,19 @@ class Fighter:
     def attack(self, target):
         damage = self.dmg - target.class_name.defense
 
+        color_dmg = (255,100,0)
+        color_no_dmg = (255,100,0)
+
+        if self.owner.name == 'Player':
+            color_dmg = (150,255,150)
+            color_no_dmg = (155,100,0)
+
         if damage > 0:
-            print('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)))
+            message('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)), color_dmg)
             target.class_name.take_damage(damage)
 
         else:
-            print('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name))
+            message('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
 
 
 # TODO: last seen player
@@ -563,7 +570,7 @@ class BasicMonster:
 def player_death(player):
     global game_state
 
-    print('You died.')
+    message('You died.')
     game_state = 'dead'
 
     player.ch = 0x1E
@@ -571,7 +578,7 @@ def player_death(player):
 
 
 def monster_death(monster):
-    print('The {} died.'.format(monster.name))
+    message('The {} died.'.format(monster.name), (150,0,0))
     monster.ch = '%'
     monster.color = (150, 0, 0)
     monster.blocks = False
@@ -615,6 +622,17 @@ def render_bar(target_console, x, y, total_width, name, value, maximum, bar_colo
         target_console.draw_str(PANEL_WIDTH - 3, y, str(value), fg = bar_color)
 
 
+def message(new_msg, color=(255, 255, 255)):
+    new_msg_lines = textwrap.wrap(new_msg, MESSAGE_WIDTH)
+
+    for line in new_msg_lines:
+        if len(game_messages) == MESSAGE_HEIGHT - 1:
+            del game_messages[0]
+
+        game_messages.append((line, color))
+
+    game_messages_history.append(new_msg)
+
 
 def render_all():
     global fov_recompute, player, game_map, fov_map, visible_tiles
@@ -648,44 +666,55 @@ def render_all():
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
     # render player panel
-    panel.draw_str(1, 0, 'HP', fg=(75,255,75))
-    render_bar(panel, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, (75,255,75), (20,80,20))
+    for x in range(MESSAGE_WIDTH):
+        for y in range(3):
+            panel_console.draw_char(x, y, ' ')
+
+
+    panel_console.draw_str(1, 0, ' ')
+    panel_console.draw_str(1, 0, 'HP', fg=(75,255,75))
+    render_bar(panel_console, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, (75,255,75), (20,80,20))
 
     try:
-        render_bar(panel, 4, 1, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
-        panel.draw_str(1, 1, 'MN', fg=(75,75,255))
+        render_bar(panel_console, 4, 1, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
+        panel_console.draw_str(1, 1, 'MN', fg=(75,75,255))
     except AttributeError:
-        render_bar(panel, 4, 1, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+        render_bar(panel_console, 4, 1, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
     try:
-        render_bar(panel, 4, 2, BAR_WIDTH, 'ST', player.class_name.stamina, player.class_name.max_stamina, (255,255,75), (80,80,20))
-        panel.draw_str(1, 2, 'ST', fg=(255,255,75))
+        render_bar(panel_console, 4, 2, BAR_WIDTH, 'ST', player.class_name.stamina, player.class_name.max_stamina, (255,255,75), (80,80,20))
+        panel_console.draw_str(1, 2, 'ST', fg=(255,255,75))
     except AttributeError:
-        render_bar(panel, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
-
-
-
+        render_bar(panel_console, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
             if x == 0:
-                panel.draw_char(x, y, 0xBA, fg=white)
+                panel_console.draw_char(x, y, 0xBA, fg=white)
 
-    console.blit(panel, DUNGEON_DISPLAY_WIDTH, 0, CONSOLE_WIDTH, CONSOLE_HEIGHT)
+    console.blit(panel_console, DUNGEON_DISPLAY_WIDTH, 0, CONSOLE_WIDTH, CONSOLE_HEIGHT)
 
     # render message panel
     for x in range(0, MESSAGE_WIDTH):
         for y in range(0, MESSAGE_HEIGHT):
             if y == 0:
                 if x == DUNGEON_DISPLAY_WIDTH:
-                    message.draw_char(x, y, 0xCA, fg=white)
+                    message_console.draw_char(x, y, 0xCA, fg=white)
                 else:
-                    message.draw_char(x, y, 0xCD, fg=white)
+                    message_console.draw_char(x, y, 0xCD, fg=white)
 
-    console.blit(message, 0, DUNGEON_DISPLAY_HEIGHT, MESSAGE_WIDTH, MESSAGE_HEIGHT)
+            else:
+                message_console.draw_char(x, y, ' ')
+
+    y = 1
+    for (line, color) in game_messages:
+        message_console.draw_str(0, y, line, fg=color)
+        y += 1
+
+    console.blit(message_console, 0, DUNGEON_DISPLAY_HEIGHT, MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
 
 # GLOBAL VARIABLES DECLARATIONS
-player = Object(x=0, y=0, ch='@', name='Player', class_name=Fighter(hp=30, defense=2, dmg=5))
+player = Object(x=0, y=0, ch='@', name='Player', class_name=Fighter(hp=30, defense=2, dmg=5, death_function=player_death))
 entities = []
 game_map = Map(MAP_WIDTH, MAP_HEIGHT)
 fov_map = tdl.map.Map(MAP_WIDTH, MAP_HEIGHT)
@@ -693,15 +722,17 @@ visible_tiles = []
 
 fov_recompute = True
 
-a_star = tdl.map.AStar(MAP_WIDTH, MAP_HEIGHT, game_map.move_cost, diagnalCost=0.5)
+a_star = tdl.map.AStar(MAP_WIDTH, MAP_HEIGHT, game_map.move_cost, diagnalCost=1)
 
 tdl.set_font('terminal16x16_gs_ro.png')
 console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
 map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
-panel = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
-message = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
+panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
+message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
 game_state = 'main_menu'
+game_messages = []
+game_messages_history = []
 
 
 def main():
