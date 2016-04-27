@@ -44,6 +44,8 @@ VISIBLE_COLORS = {'.': (139, 69, 19), '#': (150, 150, 150)}
 
 BAR_WIDTH = 10
 
+HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (150,0,0)))
+
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
 
@@ -609,7 +611,7 @@ def handle_keys():
 
 
 def render_bar(target_console, x, y, total_width, name, value, maximum, bar_color, empty_color):
-    bar_width = int(float(value) / maximum * total_width)
+    bar_width = math.ceil(float(value) / maximum * total_width)
 
     if name is not 'X':
         target_console.draw_rect(x, y, total_width, 1, 0xB0, fg = empty_color)
@@ -671,9 +673,16 @@ def render_all():
             panel_console.draw_char(x, y, ' ')
 
 
+    hp_colors = HP_COLOR[0]
+    if player.class_name.hp <= player.class_name.max_hp/4:
+        hp_colors = HP_COLOR[2]
+    elif player.class_name.hp <= player.class_name.max_hp/2:
+        hp_colors = HP_COLOR[1]
+
+
     panel_console.draw_str(1, 0, ' ')
-    panel_console.draw_str(1, 0, 'HP', fg=(75,255,75))
-    render_bar(panel_console, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, (75,255,75), (20,80,20))
+    panel_console.draw_str(1, 0, 'HP', hp_colors[0])
+    render_bar(panel_console, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, hp_colors[0], hp_colors[1])
 
     try:
         render_bar(panel_console, 4, 1, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
