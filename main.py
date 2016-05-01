@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+sys.path.append('/usr/local/lib/python3.4/dist-packages')
 
 import tdl
 import random as rn
@@ -7,7 +8,7 @@ import math
 import textwrap
 import pdb
 
-sys.path.append('/usr/local/lib/python3.4/dist-packages')
+
 
 CONSOLE_WIDTH = 80
 CONSOLE_HEIGHT = 50
@@ -536,12 +537,12 @@ class Fighter:
     def attack(self, target):
         damage = self.dmg - target.class_name.defense
 
-        color_dmg = (255,100,0)
-        color_no_dmg = (255,100,0)
+        color_dmg = (255,255,255)
+        color_no_dmg = (255,255,255)
 
         if self.owner.name == 'Player':
-            color_dmg = (150,255,150)
-            color_no_dmg = (155,100,0)
+            color_dmg = (255,255,255)
+            color_no_dmg = (255,255,255)
 
         if damage > 0:
             message('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)), color_dmg)
@@ -572,11 +573,11 @@ class BasicMonster:
 def player_death(player):
     global game_state
 
-    message('You died.')
+    message('You died.', (150,0,0))
     game_state = 'dead'
 
     player.ch = 0x1E
-    player.color = (100, 0, 0)
+    player.color = (200, 0, 0)
 
 
 def monster_death(monster):
@@ -695,6 +696,7 @@ def render_all():
         panel_console.draw_str(1, 2, 'ST', fg=(255,255,75))
     except AttributeError:
         render_bar(panel_console, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
             if x == 0:
@@ -733,7 +735,7 @@ fov_recompute = True
 
 a_star = tdl.map.AStar(MAP_WIDTH, MAP_HEIGHT, game_map.move_cost, diagnalCost=1)
 
-tdl.set_font('terminal16x16_gs_ro.png')
+tdl.set_font('SFE_Curses_square_16x16.png')
 console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
 map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
 panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
