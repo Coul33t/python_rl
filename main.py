@@ -345,7 +345,7 @@ class Map:
                     self.carve_h_tunnel(x, closest_room[0], closest_room[1])
 
             self.place_items(new_room)
-            #self.place_monsters(new_room)
+            self.place_monsters(new_room)
             rooms.append(new_room)
             num_rooms += 1
 
