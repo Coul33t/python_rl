@@ -30,6 +30,11 @@ MAX_ROOM = 30
 MIN_ROOM_SIZE = 5
 MAX_ROOM_SIZE = 15
 
+MAX_MONSTERS = 7
+MAX_ITEMS = 1
+
+INVENTORY_WIDTH = DUNGEON_DISPLAY_WIDTH - 2
+
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
 TORCH_RADIUS = 20
@@ -232,7 +237,7 @@ class Map:
     def place_monsters(self, room):
         global entities
 
-        num_monsters = rn.randint(0, 7)
+        num_monsters = rn.randint(0, MAX_MONSTERS)
 
         for i in range(num_monsters):
             x = rn.randint(room.x1, room.x2 - 1)
@@ -244,6 +249,27 @@ class Map:
                 monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(dmg=rn.randint(3,10), death_function=monster_death), ai=BasicMonster())
 
             entities.append(monster)
+
+    def place_items(self, room):
+        global entities
+
+        num_items = rn.randint(0,MAX_ITEMS)
+
+        for i in range(num_items):
+            x = -1
+            y = -1
+
+            while self._map_array[x][y].blocked:
+                x = rn.randint(room.x1, room.x2 - 1)
+                y = rn.randint(room.y1, room.y2 - 1)
+
+            if (rn.random() < 0.95):
+                item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item())
+            else:
+                item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item())
+
+            entities.append(item)
+            item.send_to_back()
 
     def create_room(self, room):
         for x in range(room.x1, room.x2):
@@ -318,19 +344,22 @@ class Map:
                     self.carve_v_tunnel(y, closest_room[1], x)
                     self.carve_h_tunnel(x, closest_room[0], closest_room[1])
 
-            self.place_monsters(new_room)
+            self.place_items(new_room)
+            #self.place_monsters(new_room)
             rooms.append(new_room)
             num_rooms += 1
 
 
 class Object:
-    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, blocks=True, class_name=None, ai=None):
+    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, blocks=True, max_inventory=10, class_name=None, ai=None, item=None):
         self._x = x
         self._y = y
         self._ch = ch
         self._name = name
         self._color = color
         self._blocks = blocks
+        self._max_inventory = max_inventory
+        self._inventory = []
 
         self._class_name = class_name
         if self._class_name:
@@ -339,6 +368,10 @@ class Object:
         self._ai = ai
         if self._ai:
             self._ai.owner = self
+
+        self._item = item
+        if self._item:
+            self._item.owner = self
 
     def _get_x(self):
         return self._x
@@ -388,6 +421,25 @@ class Object:
 
     blocks = property(_get_blocks, _set_blocks)
 
+    def _get_max_inventory(self):
+        return self._max_inventory
+
+    def _set_max_inventory(self, max_inventory):
+        self._max_inventory = max_inventory
+
+    max_inventory = property(_get_max_inventory, _set_max_inventory)
+
+    def _get_inventory(self):
+        return self._inventory
+
+    def _set_inventory(self, inventory):
+        self._inventory = inventory
+
+    inventory = property(_get_inventory, _set_inventory)
+
+    def add_to_inventory(self, item_to_add):
+        self._inventory.append(item_to_add)
+
     def _get_class_name(self):
         return self._class_name
 
@@ -403,6 +455,14 @@ class Object:
         self._ai = ai
 
     ai = property(_get_ai, _set_ai)
+
+    def _get_item(self):
+        return self._item
+
+    def _set_item(self, item):
+        self._item = item
+
+    item = property(_get_item, _set_item)
 
     def move(self, delta):
         global game_map
@@ -570,6 +630,14 @@ class BasicMonster:
                 monster.class_name.attack(player)
 
 
+class Item:
+    def pick_up(self):
+        player.add_to_inventory(self.owner)
+        entities.remove(self.owner)
+        message('You picked up a {}.'.format(self.owner.name))
+
+
+
 def player_death(player):
     global game_state
 
@@ -602,10 +670,24 @@ def handle_keys():
 
     if game_state == 'playing':
         if user_input.type == 'KEYDOWN':
+
             if user_input.key in MOVEMENT_KEYS:
                 player.player_move_attack(MOVEMENT_KEYS[user_input.key])
-                fov_recompute = True
-        fov_recompute = True
+
+            elif user_input.keychar is 'g':
+                for entity in entities:
+                    if entity._item is not None:
+                        if player.distance_to(entity) < 2:
+                            entity.item.pick_up()
+                            break
+
+                return 'didnt_take_turn'
+
+            elif user_input.keychar is 'i':
+                inventory_menu('inventory')
+                return 'didnt_take_turn'
+
+
 
     else:
         return 'didnt_take_turn'
@@ -637,18 +719,56 @@ def message(new_msg, color=(255, 255, 255)):
     game_messages_history.append(new_msg)
 
 
+def menu(header, options, width, options_colors=None):
+    height = 15
+    menu_console = tdl.Console(width, height)
+    menu_console.set_colors(bg=(10,10,50))
+    menu_console.draw_rect(0,0,None,None,None, bg=(10,10,50))
+    menu_console.draw_frame(0,0,None,None,None, bg=(25,25,150))
+    menu_console.draw_str(int(width/2) - int(len(header)/2) , 0, header)
+
+    y = 1
+    x = 1
+
+    for idx, option_text in enumerate(options):
+        text = '({}) {}'.format(idx, option_text)
+        if(options_colors):
+            menu_console.draw_str(x, y, text, fg=options_colors[idx])
+        else:
+            menu_console.draw_str(x, y, text)
+        y += 1
+
+    x = int(DUNGEON_DISPLAY_WIDTH/2) - int(width/2)
+    y = int(DUNGEON_DISPLAY_HEIGHT/2) - int(height/2)
+
+    console.blit(menu_console, 0, 0, width, height, 0, 0)
+
+    tdl.flush()
+    key = tdl.event.keyWait()
+
+
+
+def inventory_menu(header):
+    options = ['Your inventory is empty.']
+    options_colors = []
+
+    if player.inventory:
+        options = [item.name for item in player.inventory]
+        options_colors = [item.color for item in player.inventory]
+
+    index = menu(header, options, INVENTORY_WIDTH, options_colors=options_colors)
+
+
 def render_all():
     global fov_recompute, player, game_map, fov_map, visible_tiles
     visible_tiles = []
 
-    if(fov_recompute):
-        fov_recompute = False
 
-        # visible_tiles = tdl.map.quickFOV(player.x, player.y, game_map.is_visible_tile(), radius = TORCH_RADIUS, lightWalls = FOV_LIGHT_WALLS)
-        visible_tiles_iter = fov_map.compute_fov(player.x, player.y, radius=TORCH_RADIUS, light_walls=FOV_LIGHT_WALLS)
+    # visible_tiles = tdl.map.quickFOV(player.x, player.y, game_map.is_visible_tile(), radius = TORCH_RADIUS, lightWalls = FOV_LIGHT_WALLS)
+    visible_tiles_iter = fov_map.compute_fov(player.x, player.y, radius=TORCH_RADIUS, light_walls=FOV_LIGHT_WALLS)
 
-        for tile in visible_tiles_iter:
-            visible_tiles.append(tile)
+    for tile in visible_tiles_iter:
+        visible_tiles.append(tile)
 
     for x in range(DUNGEON_DISPLAY_WIDTH):
         for y in range(DUNGEON_DISPLAY_HEIGHT):
@@ -770,11 +890,12 @@ def main():
 
     game_state = 'playing'
 
-    while not tdl.event.isWindowClosed():
-        render_all()
+    render_all()
 
-        # Update the window
-        tdl.flush()
+    # Update the window
+    tdl.flush()
+
+    while not tdl.event.isWindowClosed():
 
         player_action = handle_keys()
 
@@ -785,6 +906,11 @@ def main():
             for entity in entities:
                 if entity.ai is not None:
                     entity.ai.take_turn()
+
+        render_all()
+
+        # Update the window
+        tdl.flush()
 
 
 if __name__ == '__main__':
