@@ -264,10 +264,9 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
             if (rn.random() < 0.95):
-                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item(use_function=cast_heal(10)))
-                pdb.set_trace()
+                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item(use_function=cast_heal, function_parameters=[3,7]))
             else:
-                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item(use_function=cast_heal(20)))
+                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item(use_function=cast_heal, function_parameters=[50]))
 
             entities.append(current_item)
             current_item.send_to_back()
@@ -640,8 +639,10 @@ class BasicMonster:
 
 
 class Item:
-    def __init__(self, use_function=None):
+    def __init__(self, use_function=None, function_parameters=None):
         self._use_function = use_function
+        self._function_parameters = function_parameters
+
 
     def _get_use_function(self):
         return self._use_function
@@ -660,13 +661,21 @@ class Item:
         if self._use_function == None:
             message('The {} can\'t be used.'.format(self.owner.name))
         else:
-            if self._use_function() != 'cancelled':
+            if self._use_function(self._function_parameters) != 'cancelled':
                 player.inventory.remove(self.owner)
 
 
 
 def cast_heal(amount):
-    player.class_name.heal(amount)
+    if type(amount) is list:
+        if len(amount) == 1:
+            amount = amount[0]
+        elif len(amount) == 2:
+            amount = rn.randint(amount[0], amount[1])
+        player.class_name.heal(amount)
+
+    else:
+        raise TypeError('The amount is not a list.')
 
 
 
