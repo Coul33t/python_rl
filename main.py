@@ -264,12 +264,13 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
             if (rn.random() < 0.95):
-                item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item())
+                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item(use_function=cast_heal(10)))
+                pdb.set_trace()
             else:
-                item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item())
+                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item(use_function=cast_heal(20)))
 
-            entities.append(item)
-            item.send_to_back()
+            entities.append(current_item)
+            current_item.send_to_back()
 
     def create_room(self, room):
         for x in range(room.x1, room.x2):
@@ -612,6 +613,14 @@ class Fighter:
             message('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
 
 
+    def heal(self, amount):
+        before_heal = self._hp
+        self._hp += amount
+        if self._hp > self._max_hp:
+            self._hp = self._max_hp
+        message('You drink a potion. You regain {} HP (effective : +{}).'.format(amount, self._hp - before_heal))
+
+
 # TODO: last seen player
 class BasicMonster:
     global visible_tiles, player, game_map, a_star
@@ -631,10 +640,34 @@ class BasicMonster:
 
 
 class Item:
+    def __init__(self, use_function=None):
+        self._use_function = use_function
+
+    def _get_use_function(self):
+        return self._use_function
+
+    def _set_use_function(self, use_function):
+        self._use_function = use_function
+
+    use_function = property(_get_use_function, _set_use_function)
+
     def pick_up(self):
         player.add_to_inventory(self.owner)
         entities.remove(self.owner)
         message('You picked up a {}.'.format(self.owner.name))
+
+    def use(self):
+        if self._use_function == None:
+            message('The {} can\'t be used.'.format(self.owner.name))
+        else:
+            if self._use_function() != 'cancelled':
+                player.inventory.remove(self.owner)
+
+
+
+def cast_heal(amount):
+    player.class_name.heal(amount)
+
 
 
 
@@ -681,11 +714,12 @@ def handle_keys():
                             entity.item.pick_up()
                             break
 
-                return 'didnt_take_turn'
-
             elif user_input.keychar is 'i':
-                inventory_menu('inventory')
-                return 'didnt_take_turn'
+                selected_item = inventory_menu('inventory')
+                if selected_item is not None:
+                    selected_item.use()
+                else:
+                    return 'didnt_take_turn'
 
 
 
@@ -730,8 +764,10 @@ def menu(header, options, width, options_colors=None):
     y = 1
     x = 1
 
+    letter = ord('a')
+
     for idx, option_text in enumerate(options):
-        text = '({}) {}'.format(idx, option_text)
+        text = '({}) {}'.format(chr(letter+idx), option_text)
         if(options_colors):
             menu_console.draw_str(x, y, text, fg=options_colors[idx])
         else:
@@ -741,11 +777,16 @@ def menu(header, options, width, options_colors=None):
     x = int(DUNGEON_DISPLAY_WIDTH/2) - int(width/2)
     y = int(DUNGEON_DISPLAY_HEIGHT/2) - int(height/2)
 
-    console.blit(menu_console, 0, 0, width, height, 0, 0)
+    console.blit(menu_console, x, y, width, height, 0, 0)
 
     tdl.flush()
-    key = tdl.event.keyWait()
+    user_input = tdl.event.key_wait()
 
+    if user_input.type == 'KEYDOWN':
+        index = ord(user_input.keychar) - ord('a')
+        if index >= 0 and index < len(options):
+            return index
+        return None
 
 
 def inventory_menu(header):
@@ -757,6 +798,11 @@ def inventory_menu(header):
         options_colors = [item.color for item in player.inventory]
 
     index = menu(header, options, INVENTORY_WIDTH, options_colors=options_colors)
+
+    if index is None:
+        return None
+
+    return player.inventory[index].item
 
 
 def render_all():
