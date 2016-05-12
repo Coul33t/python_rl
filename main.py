@@ -620,6 +620,56 @@ class Fighter:
         message('You drink a potion. You regain {} HP (effective : +{}).'.format(amount, self._hp - before_heal))
 
 
+    def target_monster(self):
+        global visible_tiles, entities, map_console, game_map
+
+        targetable_monsters = []
+
+        for entity in entities:
+            # If it's a monster, basically
+            if entity.ai is not None:
+                if (entity.x, entity.y) in visible_tiles:
+                    targetable_monsters.append(entity)
+
+        targeted = -1
+        current_idx = 0
+        max_idx = len(targetable_monsters)-1
+
+        while targeted is not None:
+            if current_idx == max_idx:
+                current_idx = 0
+
+            targeted = targetable_monsters[current_idx]
+
+            if current_idx == 0:
+                last_entity = targetable_monsters[-1]
+            else:
+                last_entity = targetable_monsters[current_idx - 1]
+
+            # Color Ellipsis should be by default (last print color)
+            map_console.draw_char(last_entity.x, last_entity.y, game_map.map_array[last_entity.x][last_entity.y].ch)
+            map_console.draw_char(entity.x, entity.y, game_map.map_array[entity.x][entity.y].ch, bg = white)
+
+
+            user_input = tdl.event.key_wait()
+
+            if user_input.type == 'KEYDOWN':
+                if user_input.key == 'SPACE':
+                    targeted = targetable_monsters[current_idx]
+                    break
+
+                elif user_input.key == 'TAB':
+                    current_idx += 1
+
+                elif user_input.key == 'C':
+                    targeted = None
+
+        return targeted
+
+
+
+
+
 # TODO: last seen player
 class BasicMonster:
     global visible_tiles, player, game_map, a_star
