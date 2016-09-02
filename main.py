@@ -55,7 +55,7 @@ HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (15
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
 
-class Rect():
+class Rect:
     def __init__(self, x, y, w, h):
         self._x1 = x
         self._y1 = y
@@ -670,7 +670,6 @@ class Fighter:
 
 
 
-# TODO: last seen player
 class BasicMonster:
     global visible_tiles, player, game_map, a_star
 
@@ -854,7 +853,9 @@ def menu(header, options, width, options_colors=None):
 
     if user_input.type == 'KEYDOWN':
         index = ord(user_input.keychar) - ord('a')
-        if index >= 0 and index < len(options):
+        # Because if the inventory is empty, there's still a (a) option
+        if index >= 0 and index < len(options) and not options == ['Your inventory is empty.']:
+            pdb.set_trace()
             return index
         return None
 
