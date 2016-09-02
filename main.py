@@ -674,18 +674,29 @@ class Fighter:
 class BasicMonster:
     global visible_tiles, player, game_map, a_star
 
+    def __init__(self):
+        self._last_seen_player = (None, None)
+
     def take_turn(self):
         monster = self.owner
 
         if (monster.x, monster.y) in visible_tiles:
             if monster.distance_to(player) > 1:
                 new_path = a_star.get_path(monster.x, monster.y, player.x, player.y)
+                self._last_seen_player = ( player.x, player.y)
 
                 if new_path:
                     monster.move_towards(new_path[0][0], new_path[0][1])
 
             else:
                 monster.class_name.attack(player)
+
+
+        elif not self._last_seen_player == (None, None):
+            new_path = a_star.get_path(monster.x, monster.y, self._last_seen_player[0], self._last_seen_player[1])
+
+            if new_path:
+                monster.move_towards(new_path[0][0], new_path[0][1])
 
 
 class Item:
@@ -969,7 +980,6 @@ message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
 game_state = 'main_menu'
 game_messages = []
 game_messages_history = []
-
 
 def main():
 
