@@ -244,9 +244,9 @@ class Map:
             y = rn.randint(room.y1, room.y2 - 1)
 
             if(rn.random() < 0.8):
-                monster = Object(x, y, 'g', name='Genestealer', color=(0, 75, 0), class_name=Fighter(dmg=rn.randint(1,3), death_function=monster_death), ai=BasicMonster())
+                monster = Object(x, y, 'a', name='Assimilator', color=(139,69,19), class_name=BasicClass(dmg=rn.randint(1,3), death_function=monster_death), ai=BasicMonster())
             else:
-                monster = Object(x, y, 'G', name='Genestealer Alpha', color=(0, 150, 0), class_name=Fighter(dmg=rn.randint(3,10), death_function=monster_death), ai=BasicMonster())
+                monster = Object(x, y, 'A', name='Assimilator Alpha', color=(199,129,79), class_name=BasicClass(dmg=rn.randint(3,10), death_function=monster_death), ai=BasicMonster())
 
             entities.append(monster)
 
@@ -351,12 +351,13 @@ class Map:
 
 
 class Object:
-    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, blocks=True, max_inventory=10, class_name=None, ai=None, item=None):
+    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, max_inventory=10, class_name=None, ai=None, item=None):
         self._x = x
         self._y = y
         self._ch = ch
         self._name = name
         self._color = color
+        self._bkg_color = bkg_color;
         self._blocks = blocks
         self._max_inventory = max_inventory
         self._inventory = []
@@ -404,6 +405,14 @@ class Object:
         self._color = color
 
     color = property(_get_color, _set_color)
+
+    def _get_bkg_color(self):
+        return self._bkg_color
+
+    def _set_bkg_color(self, bkg_color):
+        self._bkg_color = bkg_color
+
+    bkg_color = property(_get_bkg_color, _set_bkg_color)
 
     def _get_name(self):
         return self._name
@@ -517,7 +526,7 @@ class Object:
             map_console.draw_char(self._x, self._y, self._ch, fg=self._color)
 
 
-class Fighter:
+class BasicClass:
     def __init__(self, hp=10, stamina=10, defense=0, dmg=2, death_function=None):
         self._hp = hp
         self._max_hp = hp
@@ -584,6 +593,8 @@ class Fighter:
 
     death_function = property(_get_death_function, _set_death_function)
 
+
+
     def take_damage(self, damage):
         if damage > 0:
             self._hp -= damage
@@ -593,6 +604,8 @@ class Fighter:
 
             if function is not None:
                 function(self.owner)
+
+
 
     def attack(self, target):
         damage = self.dmg - target.class_name.defense
@@ -612,62 +625,37 @@ class Fighter:
             message('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
 
 
+
+    def ranged_attack(self, amount):
+        target = target_monster()
+        
+        if target is not None:
+            damage = self.dmg - target.class_name.defense
+
+            color_dmg = (255,255,255)
+            color_no_dmg = (255,255,255)
+
+            if self.owner.name == 'Player':
+                color_dmg = (255,255,255)
+                color_no_dmg = (255,255,255)
+
+            if damage > 0:
+                message('{} attacks {} from affar for {} damage.'.format(self.owner.name, target.name, str(damage)), color_dmg)
+                target.class_name.take_damage(damage)
+
+            else:
+                message('The {} ranged attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
+
+        return target
+
+
+
     def heal(self, amount):
         before_heal = self._hp
         self._hp += amount
         if self._hp > self._max_hp:
             self._hp = self._max_hp
         message('You drink a potion. You regain {} HP (effective : +{}).'.format(amount, self._hp - before_heal))
-
-
-    def target_monster(self):
-        global visible_tiles, entities, map_console, game_map
-
-        targetable_monsters = []
-
-        for entity in entities:
-            # If it's a monster, basically
-            if entity.ai is not None:
-                if (entity.x, entity.y) in visible_tiles:
-                    targetable_monsters.append(entity)
-
-        targeted = -1
-        current_idx = 0
-        max_idx = len(targetable_monsters)-1
-
-        while targeted is not None:
-            if current_idx == max_idx:
-                current_idx = 0
-
-            targeted = targetable_monsters[current_idx]
-
-            if current_idx == 0:
-                last_entity = targetable_monsters[-1]
-            else:
-                last_entity = targetable_monsters[current_idx - 1]
-
-            # Color Ellipsis should be by default (last print color)
-            map_console.draw_char(last_entity.x, last_entity.y, game_map.map_array[last_entity.x][last_entity.y].ch)
-            map_console.draw_char(entity.x, entity.y, game_map.map_array[entity.x][entity.y].ch, bg = white)
-
-
-            user_input = tdl.event.key_wait()
-
-            if user_input.type == 'KEYDOWN':
-                if user_input.key == 'SPACE':
-                    targeted = targetable_monsters[current_idx]
-                    break
-
-                elif user_input.key == 'TAB':
-                    current_idx += 1
-
-                elif user_input.key == 'C':
-                    targeted = None
-
-        return targeted
-
-
-
 
 
 class BasicMonster:
@@ -726,6 +714,8 @@ class Item:
 
 
 
+
+
 def cast_heal(amount):
     if type(amount) is list:
         if len(amount) == 1:
@@ -736,6 +726,68 @@ def cast_heal(amount):
 
     else:
         raise TypeError('The amount is not a list.')
+
+
+
+
+
+def target_monster():
+    global visible_tiles, entities, map_console, game_map
+
+    targetable_monsters = []
+
+    for entity in entities:
+        # If it's a monster, basically
+        if entity.ai is not None:
+            if (entity.x, entity.y) in visible_tiles:
+                targetable_monsters.append(entity)
+
+    targeted = -1
+    current_idx = 0
+    max_idx = len(targetable_monsters)
+
+    if len(targetable_monsters) > 0:
+
+        message('Fire mode, choose a target')
+
+        while targeted is not None:
+            if current_idx == max_idx:
+                current_idx = 0
+
+            targeted = targetable_monsters[current_idx]
+
+            if current_idx == 0:
+                last_entity = targetable_monsters[-1]
+            else:
+                last_entity = targetable_monsters[current_idx - 1]
+
+            # Color Ellipsis should be by default (last print color)
+            last_entity.bkg_color = None
+            targetable_monsters[current_idx].bkg_color = white
+            map_console.draw_char(targetable_monsters[current_idx].x, targetable_monsters[current_idx].y, 
+                                  game_map.map_array[targetable_monsters[current_idx].x][targetable_monsters[current_idx].y].ch)
+
+            render_all
+            tdl.flush()
+            
+
+            user_input = tdl.event.key_wait()
+
+            if user_input.type == 'KEYDOWN':
+                if user_input.key == 'SPACE':
+                    targeted = targetable_monsters[current_idx]
+                    break
+
+                elif user_input.key == 'TAB':
+                    current_idx += 1
+
+                elif user_input.keychar == 'c':
+                    targeted = None
+
+        return targeted
+
+    return None
+
 
 
 
@@ -759,6 +811,9 @@ def monster_death(monster):
     monster.ai = None
     monster.name = 'Remains of ' + monster.name + '.'
     monster.send_to_back()
+
+
+
 
 
 def handle_keys():
@@ -789,6 +844,15 @@ def handle_keys():
                     selected_item.use()
                 else:
                     return 'didnt_take_turn'
+
+            elif user_input.keychar is 'f':
+                target = player.class_name.ranged_attack(player.class_name.dmg)
+                if target is None:
+                    return 'didnt_take_turn'
+
+            else:
+                return 'didnt_take_turn'
+
 
 
 
@@ -852,16 +916,19 @@ def menu(header, options, width, options_colors=None):
     user_input = tdl.event.key_wait()
 
     if user_input.type == 'KEYDOWN':
+        if not options:
+            None
+
         index = ord(user_input.keychar) - ord('a')
+
         # Because if the inventory is empty, there's still a (a) option
-        if index >= 0 and index < len(options) and not options == ['Your inventory is empty.']:
-            pdb.set_trace()
+        if index >= 0 and index < len(options):
             return index
         return None
 
 
 def inventory_menu(header):
-    options = ['Your inventory is empty.']
+    options = []
     options_colors = []
 
     if player.inventory:
@@ -877,7 +944,7 @@ def inventory_menu(header):
 
 
 def render_all():
-    global fov_recompute, player, game_map, fov_map, visible_tiles
+    global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count
     visible_tiles = []
 
 
@@ -934,6 +1001,8 @@ def render_all():
     except AttributeError:
         render_bar(panel_console, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
+    panel_console.draw_str(1, PANEL_HEIGHT-2, str(turn_count), fg=(25,25,25))
+
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
             if x == 0:
@@ -962,7 +1031,7 @@ def render_all():
 
 
 # GLOBAL VARIABLES DECLARATIONS
-player = Object(x=0, y=0, ch='@', name='Player', class_name=Fighter(hp=30, defense=2, dmg=5, death_function=player_death))
+player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, dmg=5, death_function=player_death))
 entities = []
 game_map = Map(MAP_WIDTH, MAP_HEIGHT)
 fov_map = tdl.map.Map(MAP_WIDTH, MAP_HEIGHT)
@@ -982,11 +1051,13 @@ game_state = 'main_menu'
 game_messages = []
 game_messages_history = []
 
+turn_count = 0
+
 def main():
 
     game_map.create_map()
 
-    global fov_map, game_state, entities, player
+    global fov_map, game_state, entities, player, turn_count
 
     for x, y in fov_map:
         fov_map.transparent[x, y] = not game_map.map_array[x][y].block_sight
@@ -1002,7 +1073,7 @@ def main():
 
     tdl.flush()
 
-    tdl.event.keyWait()
+    tdl.event.key_wait()
 
     game_state = 'playing'
 
@@ -1026,7 +1097,10 @@ def main():
         render_all()
 
         # Update the window
+        
         tdl.flush()
+        turn_count += 1
+
 
 
 if __name__ == '__main__':
