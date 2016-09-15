@@ -744,17 +744,43 @@ def cast_heal(amount):
 
 
 
-
+# TODO: display bug when cancelling targeting (highlight stay until an action is performed)
 def target_monster():
     global visible_tiles, entities, map_console, game_map
 
     targetable_monsters = []
+    untargetable_wall = 0
+    untargetable_monster = 0
 
+    # Here, we check for every monsters available to targeting.
+    # 1) draw a bresenham line between the player and the entity
+    # 2a) if there's a wall in the path, do not allow targeting
+    # 2b) if there's a monster in the path, do not allow targeting
+    # 3) else, put the monster in the targetable list
     for entity in entities:
         # If it's a monster, basically
         if entity.ai is not None:
             if (entity.x, entity.y) in visible_tiles:
-                targetable_monsters.append(entity)
+                
+                wall = False
+                
+                path_to_monster = tdl.map.bresenham(player.x, player.y, entity.x, entity.y)
+                
+                # If the path is blocked by a wall or a monster, we don't allow the player to shoot at it
+                for x,y in path_to_monster:
+                    # Wall
+                    if game_map.map_array[x][y].blocked:
+                        wall = True
+                        untargetable_wall += 1
+                    # Monster
+                    else:
+                        for entity_2 in entities:
+                            if (x,y) != (entity.x,entity.y) and (entity_2.x, entity_2.y) == (x,y) and entity_2.blocks:
+                                wall = True
+                                untargetable_monster += 1
+                
+                if not wall:
+                    targetable_monsters.append(entity)
 
     targeted = -1
     current_idx = 0
@@ -762,7 +788,9 @@ def target_monster():
 
     if len(targetable_monsters) > 0:
 
-        message('Fire mode, choose a target')
+        message('Fire mode, choose a target ({} blocked by wall, {} blocked by monsters)'.format(untargetable_wall, untargetable_monster))
+
+        path_to_monster = tdl.map.bresenham(player.x, player.y, targetable_monsters[0].x, targetable_monsters[0].y)
 
         while targeted is not None:
             if current_idx == max_idx:
@@ -775,6 +803,17 @@ def target_monster():
             else:
                 last_entity = targetable_monsters[current_idx - 1]
 
+            last_path = path_to_monster
+            path_to_monster = tdl.map.bresenham(player.x, player.y, targetable_monsters[current_idx].x, targetable_monsters[current_idx].y)
+
+
+            for x,y in last_path:
+                game_map.map_array[x][y].bkg_color = Ellipsis
+
+            for x,y in path_to_monster:
+                game_map.map_array[x][y].bkg_color = (150,150,150)
+
+            
 
             last_entity.bkg_color = Ellipsis
             last_entity.force_draw()
@@ -806,6 +845,13 @@ def target_monster():
 
         targetable_monsters[current_idx].bkg_color = Ellipsis
         targetable_monsters[current_idx].force_draw()
+
+        for x,y in path_to_monster:
+            game_map.map_array[x][y].bkg_color = Ellipsis
+
+        for x,y in last_path:
+            game_map.map_array[x][y].bkg_color = Ellipsis
+
         return targeted
 
     return None
