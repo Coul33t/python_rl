@@ -103,12 +103,13 @@ class Rect:
 
 
 class Tile:
-    def __init__(self, ch, blocked=True, block_sight=True, color=white):
+    def __init__(self, ch, blocked=True, block_sight=True, color=white, bkg_color = None):
         self._ch = ch
         self._explored = False
         self._blocked = blocked
         self._block_sight = block_sight
         self._color = color
+        self._bkg_color = bkg_color
 
     def _get_ch(self):
         return self._ch
@@ -149,6 +150,14 @@ class Tile:
         self._color = color
 
     color = property(_get_color, _set_color)
+
+    def _get_bkg_color(self):
+        return self._bkg_color
+
+    def _set_bkg_color(self, bkg_color):
+        self._bkg_color = bkg_color
+
+    bkg_color = property(_get_bkg_color, _set_bkg_color)
 
 
 class Map:
@@ -357,7 +366,7 @@ class Object:
         self._ch = ch
         self._name = name
         self._color = color
-        self._bkg_color = bkg_color;
+        self._bkg_color = bkg_color
         self._blocks = blocks
         self._max_inventory = max_inventory
         self._inventory = []
@@ -523,7 +532,12 @@ class Object:
         global map_console
 
         if (self._x, self._y) in visible_tiles:
-            map_console.draw_char(self._x, self._y, self._ch, fg=self._color)
+            map_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+
+    def force_draw(self):
+        global map_console
+
+        map_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
 
 
 class BasicClass:
@@ -761,29 +775,37 @@ def target_monster():
             else:
                 last_entity = targetable_monsters[current_idx - 1]
 
-            # Color Ellipsis should be by default (last print color)
-            last_entity.bkg_color = None
-            targetable_monsters[current_idx].bkg_color = white
-            map_console.draw_char(targetable_monsters[current_idx].x, targetable_monsters[current_idx].y, 
-                                  game_map.map_array[targetable_monsters[current_idx].x][targetable_monsters[current_idx].y].ch)
 
-            render_all
+            last_entity.bkg_color = Ellipsis
+            last_entity.force_draw()
+     
+            targetable_monsters[current_idx].bkg_color = white
+            targetable_monsters[current_idx].force_draw()
+            
+            render_all()
             tdl.flush()
             
 
-            user_input = tdl.event.key_wait()
+            user_input = None
 
-            if user_input.type == 'KEYDOWN':
-                if user_input.key == 'SPACE':
-                    targeted = targetable_monsters[current_idx]
-                    break
+            for event in tdl.event.get():
+                if event.type == 'KEYDOWN':
+                    user_input = event
 
-                elif user_input.key == 'TAB':
-                    current_idx += 1
+            if user_input:
+                if user_input.type == 'KEYDOWN':
+                    if user_input.key == 'SPACE':
+                        targeted = targetable_monsters[current_idx]
+                        break
 
-                elif user_input.keychar == 'c':
-                    targeted = None
+                    elif user_input.key == 'TAB':
+                        current_idx += 1
 
+                    elif user_input.keychar == 'c':
+                        targeted = None
+
+        targetable_monsters[current_idx].bkg_color = Ellipsis
+        targetable_monsters[current_idx].force_draw()
         return targeted
 
     return None
@@ -819,14 +841,21 @@ def monster_death(monster):
 def handle_keys():
     global fov_recompute, game_state, player
 
-    user_input = tdl.event.key_wait()
+    user_input = None
 
-    if user_input.type == 'KEYDOWN':
+    for event in tdl.event.get():
+        if event.type == 'KEYDOWN':
+            user_input = event
+
+    if user_input:
         if user_input.key == 'ESCAPE':
             return 'exit'
 
-    if game_state == 'playing':
-        if user_input.type == 'KEYDOWN':
+        if user_input.keychar == '?':
+            help_menu()
+            return 'didnt_take_turn'
+
+        if game_state == 'playing':
 
             if user_input.key in MOVEMENT_KEYS:
                 player.player_move_attack(MOVEMENT_KEYS[user_input.key])
@@ -913,11 +942,15 @@ def menu(header, options, width, options_colors=None):
     console.blit(menu_console, x, y, width, height, 0, 0)
 
     tdl.flush()
+
     user_input = tdl.event.key_wait()
+
+    render_all()
+    tdl.flush()
 
     if user_input.type == 'KEYDOWN':
         if not options:
-            None
+            return None
 
         index = ord(user_input.keychar) - ord('a')
 
@@ -925,6 +958,7 @@ def menu(header, options, width, options_colors=None):
         if index >= 0 and index < len(options):
             return index
         return None
+
 
 
 def inventory_menu(header):
@@ -943,6 +977,44 @@ def inventory_menu(header):
     return player.inventory[index].item
 
 
+def text_window(header, text):
+
+    width = DUNGEON_DISPLAY_WIDTH-3
+    height = DUNGEON_DISPLAY_HEIGHT-3
+
+    text_console = tdl.Console(width, height)
+    text_console.set_colors(bg=(0,50,0))
+    text_console.draw_rect(1,1,None,None,None,bg=(0,50,0))
+    text_console.draw_frame(1,1,None,None,None,bg=(150,250,150))
+    text_console.draw_str(int(width/2) - int(len(header)/2) , 1, header, bg=(150,250,150), fg=(0,0,0))
+
+    lines = []
+
+    for line in text:
+        lines.append(textwrap.wrap(line, width-2))
+
+    y = 2
+    for line_to_print in lines:
+        text_console.draw_str(int(2), int(y), str(*line_to_print))
+        y += 1
+
+    console.blit(text_console, 1, 1, width, height, 0, 0)
+
+    tdl.flush()
+    user_input = tdl.event.key_wait()
+
+    render_all()
+    tdl.flush()
+    if user_input.type == 'KEYDOWN':
+        return None
+
+
+
+def help_menu():
+    text = [line.rstrip('\n') for line in open('help.txt')]
+    text_window('Help', text)
+
+
 def render_all():
     global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count
     visible_tiles = []
@@ -958,17 +1030,17 @@ def render_all():
         for y in range(DUNGEON_DISPLAY_HEIGHT):
             if (x, y) in visible_tiles:
                 game_map.map_array[x][y].explored = True
-                map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=VISIBLE_COLORS[game_map.map_array[x][y].ch])
+                map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=VISIBLE_COLORS[game_map.map_array[x][y].ch], bg=game_map.map_array[x][y].bkg_color)
             else:
                 if game_map.map_array[x][y].explored:
-                    map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[x][y].ch])
+                    map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[x][y].ch], bg=game_map.map_array[x][y].bkg_color)
 
     # entities
     for entity in entities:
         entity.draw(visible_tiles)
 
     # player
-    map_console.draw_char(player.x, player.y, player.ch, fg=player.color)
+    map_console.draw_char(player.x, player.y, player.ch, fg=player.color, bg=player.bkg_color)
 
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
@@ -1001,7 +1073,7 @@ def render_all():
     except AttributeError:
         render_bar(panel_console, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
-    panel_console.draw_str(1, PANEL_HEIGHT-2, str(turn_count), fg=(25,25,25))
+    panel_console.draw_str(1, PANEL_HEIGHT-2, str(turn_count), fg=(75,75,75))
 
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
@@ -1083,8 +1155,10 @@ def main():
     tdl.flush()
 
     while not tdl.event.isWindowClosed():
+        player_action = 'didnt_take_turn'
 
-        player_action = handle_keys()
+        while player_action == 'didnt_take_turn':
+            player_action = handle_keys()
 
         if player_action == 'exit':
             break

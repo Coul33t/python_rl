@@ -1,0 +1,26 @@
+LIST OF COMMANDS :
+
+-- general purpose --
+
+? : show help menu (this one)
+ESC : quit game (no warning !)
+
+
+-- game specific --
+movement :
+
+ 7 8 9
+  \|/
+4--o--6
+  /|\
+ 1 2 3
+
+
+5 : wait
+
+g : get item (up to one tile)
+
+f : fire mode
+    TAB : switch to next monster
+    SPACE : fire to current monster
+    c : cancel
