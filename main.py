@@ -6,6 +6,7 @@ import tdl
 import random as rn
 import math
 import textwrap
+import shelve
 import pdb
 
 
@@ -901,6 +902,10 @@ def handle_keys():
 
     if user_input:
         if user_input.key == 'ESCAPE':
+
+            if game_state == 'playing':
+                save_game()
+
             return 'exit'
 
         if user_input.keychar == '?':
@@ -1189,7 +1194,8 @@ def main_menu():
             tdl.flush()
             key = tdl.event.key_wait()
             
-        new_game()
+            new_game()
+        
         play_game()
 
 
@@ -1198,15 +1204,19 @@ def main_menu():
 
 
 
+def initialize_consoles():
+    global console, map_console, panel_console, message_console, turn_count
 
+    map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
+    panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
+    message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
+
+    turn_count = 0
 
 def new_game():
     global console, map_console, panel_console, message_console, entities, visible_tiles, player, a_star, game_map, game_state, game_messages, game_messages_history, turn_count
 
-    
-    map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
-    panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
-    message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
+    initialize_consoles()
 
     entities = []
     visible_tiles = []
@@ -1229,8 +1239,6 @@ def new_game():
     for x in range(DUNGEON_DISPLAY_WIDTH):
         for y in range(DUNGEON_DISPLAY_HEIGHT):
             console.draw_char(x, y, ' ')
-
-    turn_count = 0
 
 def initialize_fov():
     global fov_map, fov_recompute
@@ -1278,7 +1286,7 @@ def play_game():
 def save_game():
     global game_map, entities, player, game_messages, game_messages_history, game_state
 
-    file = shelve.open('save', n)
+    file = shelve.open('save', 'n')
 
     file['game_map'] = game_map
     file['entities'] = entities
@@ -1292,7 +1300,7 @@ def save_game():
 def load_game():
     global game_map, entities, player, game_messages, game_messages_history, game_state
 
-    file = shelve.open('save', n)
+    file = shelve.open('save', 'n')
 
     game_map = file['game_map']
     entities = file['entities']
@@ -1301,6 +1309,7 @@ def load_game():
     game_messages_history = file['game_messages_history']
     game_state = file['game_state']
 
+    initialize_consoles()
     initialize_fov()
 
 def main():
