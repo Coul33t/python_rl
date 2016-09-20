@@ -852,7 +852,13 @@ def target_monster():
         for x,y in last_path:
             game_map.map_array[x][y].bkg_color = Ellipsis
 
+        render_all()
+        tdl.flush()
+
         return targeted
+
+    render_all()
+    tdl.flush()
 
     return None
 
@@ -1149,55 +1155,101 @@ def render_all():
 
 
 # GLOBAL VARIABLES DECLARATIONS
-player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, dmg=5, death_function=player_death))
-entities = []
-game_map = Map(MAP_WIDTH, MAP_HEIGHT)
-fov_map = tdl.map.Map(MAP_WIDTH, MAP_HEIGHT)
-visible_tiles = []
 
-fov_recompute = True
 
-a_star = tdl.map.AStar(MAP_WIDTH, MAP_HEIGHT, game_map.move_cost, diagnalCost=1)
 
-tdl.set_font('SFE_Curses_square_16x16.png')
-console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
-map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
-panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
-message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
+def main_menu():
+    global console
 
-game_state = 'main_menu'
-game_messages = []
-game_messages_history = []
+    console.draw_str(2, 2, "Welcome to [NAME ERROR]")
+    console.draw_str(2, 4, "(1) New Game")
+    console.draw_str(2, 5, "(2) Load Game")
+    console.draw_str(2, 6, "(3) Quit")
 
-turn_count = 0
+    tdl.flush()
 
-def main():
+    key = tdl.event.key_wait()
 
+    if key.keychar == '1' or key.keychar == 'KP1':
+        new_game()
+        play_game()
+
+
+    elif key.keychar == '2' or key.keychar == 'KP2':
+        
+        try:
+            load_game()
+
+        except:
+            for x in range(DUNGEON_DISPLAY_WIDTH):
+                for y in range(DUNGEON_DISPLAY_HEIGHT):
+                    console.draw_char(x, y, ' ')
+
+            console.draw_str(2,5, "No savegame ! Launching new game, press any key to continue")
+            tdl.flush()
+            key = tdl.event.key_wait()
+            
+        new_game()
+        play_game()
+
+
+    elif key.keychar =='3' or key.keychar == 'KP3':
+        pass
+
+
+
+
+
+def new_game():
+    global console, map_console, panel_console, message_console, entities, visible_tiles, player, a_star, game_map, game_state, game_messages, game_messages_history, turn_count
+
+    
+    map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
+    panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
+    message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
+
+    entities = []
+    visible_tiles = []
+
+    player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, dmg=5, death_function=player_death))
+
+    game_map = Map(MAP_WIDTH, MAP_HEIGHT)
     game_map.create_map()
 
-    global fov_map, game_state, entities, player, turn_count
+    initialize_fov()
 
-    for x, y in fov_map:
-        fov_map.transparent[x, y] = not game_map.map_array[x][y].block_sight
-        fov_map.walkable[x, y] = not game_map.map_array[x][y].blocked
+    a_star = tdl.map.AStar(MAP_WIDTH, MAP_HEIGHT, game_map.move_cost, diagnalCost=1)
+
+    game_state = 'main_menu'
+    game_messages = []
+    game_messages_history = []
+  
 
     # Main screen
     for x in range(DUNGEON_DISPLAY_WIDTH):
         for y in range(DUNGEON_DISPLAY_HEIGHT):
             console.draw_char(x, y, ' ')
 
-    console.draw_str(2, 2, "Press any key")
-    console.draw_str(2, 3, "to start")
+    turn_count = 0
 
-    tdl.flush()
+def initialize_fov():
+    global fov_map, fov_recompute
 
-    tdl.event.key_wait()
+    fov_recompute = True
+
+    fov_map = tdl.map.Map(MAP_WIDTH, MAP_HEIGHT)
+
+    for x, y in fov_map:
+        fov_map.transparent[x, y] = not game_map.map_array[x][y].block_sight
+        fov_map.walkable[x, y] = not game_map.map_array[x][y].blocked
+
+def play_game():
+
+    global game_state, entities, turn_count
 
     game_state = 'playing'
 
     render_all()
-
-    # Update the window
     tdl.flush()
 
     while not tdl.event.isWindowClosed():
@@ -1214,12 +1266,55 @@ def main():
                 if entity.ai is not None:
                     entity.ai.take_turn()
 
+
+        turn_count += 1
+
         render_all()
 
         # Update the window
         
         tdl.flush()
-        turn_count += 1
+        
+def save_game():
+    global game_map, entities, player, game_messages, game_messages_history, game_state
+
+    file = shelve.open('save', n)
+
+    file['game_map'] = game_map
+    file['entities'] = entities
+    file['player'] = player
+    file['game_messages'] = game_messages
+    file['game_messages_history'] = game_messages_history
+    file['game_state'] = game_state
+
+    file.close()
+
+def load_game():
+    global game_map, entities, player, game_messages, game_messages_history, game_state
+
+    file = shelve.open('save', n)
+
+    game_map = file['game_map']
+    entities = file['entities']
+    player = file['player']
+    game_messages = file['game_messages'] 
+    game_messages_history = file['game_messages_history']
+    game_state = file['game_state']
+
+    initialize_fov()
+
+def main():
+    global console
+
+    tdl.set_font('SFE_Curses_square_16x16.png')
+    console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
+
+    main_menu()
+
+
+    
+
+    
 
 
 
