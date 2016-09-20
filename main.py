@@ -361,7 +361,7 @@ class Map:
 
 
 class Object:
-    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, max_inventory=10, class_name=None, ai=None, item=None):
+    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, class_name=None, ai=None, item=None):
         self._x = x
         self._y = y
         self._ch = ch
@@ -369,8 +369,6 @@ class Object:
         self._color = color
         self._bkg_color = bkg_color
         self._blocks = blocks
-        self._max_inventory = max_inventory
-        self._inventory = []
 
         self._class_name = class_name
         if self._class_name:
@@ -439,25 +437,6 @@ class Object:
         self._blocks = blocks
 
     blocks = property(_get_blocks, _set_blocks)
-
-    def _get_max_inventory(self):
-        return self._max_inventory
-
-    def _set_max_inventory(self, max_inventory):
-        self._max_inventory = max_inventory
-
-    max_inventory = property(_get_max_inventory, _set_max_inventory)
-
-    def _get_inventory(self):
-        return self._inventory
-
-    def _set_inventory(self, inventory):
-        self._inventory = inventory
-
-    inventory = property(_get_inventory, _set_inventory)
-
-    def add_to_inventory(self, item_to_add):
-        self._inventory.append(item_to_add)
 
     def _get_class_name(self):
         return self._class_name
@@ -542,13 +521,16 @@ class Object:
 
 
 class BasicClass:
-    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, death_function=None):
+    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, max_inventory=10, death_function=None):
         self._hp = hp
         self._max_hp = hp
         self._stamina = stamina
         self._max_stamina = stamina
         self._defense = defense
         self._dmg = dmg
+
+        self._max_inventory = max_inventory
+        self._inventory = []
 
         self._death_function = death_function
 
@@ -599,6 +581,25 @@ class BasicClass:
         self._dmg = dmg
 
     dmg = property(_get_dmg, _set_dmg)
+
+    def _get_max_inventory(self):
+        return self._max_inventory
+
+    def _set_max_inventory(self, max_inventory):
+        self._max_inventory = max_inventory
+
+    max_inventory = property(_get_max_inventory, _set_max_inventory)
+
+    def _get_inventory(self):
+        return self._inventory
+
+    def _set_inventory(self, inventory):
+        self._inventory = inventory
+
+    inventory = property(_get_inventory, _set_inventory)
+
+    def add_to_inventory(self, item_to_add):
+        self._inventory.append(item_to_add)
 
     def _get_death_function(self):
         return self._death_function
@@ -716,7 +717,7 @@ class Item:
     use_function = property(_get_use_function, _set_use_function)
 
     def pick_up(self):
-        player.add_to_inventory(self.owner)
+        player.class_name.add_to_inventory(self.owner)
         entities.remove(self.owner)
         message('You picked up a {}.'.format(self.owner.name))
 
@@ -725,7 +726,7 @@ class Item:
             message('The {} can\'t be used.'.format(self.owner.name))
         else:
             if self._use_function(self._function_parameters) != 'cancelled':
-                player.inventory.remove(self.owner)
+                player.class_name.inventory.remove(self.owner)
 
 
 
@@ -1022,16 +1023,16 @@ def inventory_menu(header):
     options = []
     options_colors = []
 
-    if player.inventory:
-        options = [item.name for item in player.inventory]
-        options_colors = [item.color for item in player.inventory]
+    if player.class_name.inventory:
+        options = [item.name for item in player.class_name.inventory]
+        options_colors = [item.color for item in player.class_name.inventory]
 
     index = menu(header, options, INVENTORY_WIDTH, options_colors=options_colors)
 
     if index is None:
         return None
 
-    return player.inventory[index].item
+    return player.class_name.inventory[index].item
 
 
 def text_window(header, text):
@@ -1319,13 +1320,6 @@ def main():
     console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
 
     main_menu()
-
-
-    
-
-    
-
-
 
 if __name__ == '__main__':
     main()
