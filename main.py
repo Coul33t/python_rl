@@ -46,8 +46,9 @@ white = (255, 255, 255)
 light_red = (255, 100, 100)
 light_blue = (100, 100, 255)
 
-NOT_VISIBLE_COLORS = {'.': (35, 17, 5), '#': (50, 50, 50)}
-VISIBLE_COLORS = {'.': (139, 69, 19), '#': (150, 150, 150)}
+MAP_TILES = {'wall': 0xB2, 'floor': 0xB0}
+NOT_VISIBLE_COLORS = {0xB0: (25, 25, 25), 0xB2: (50, 50, 50)}
+VISIBLE_COLORS = {0xB0: (100, 100, 100), 0xB2: (150, 150, 150)}
 
 BAR_WIDTH = 10
 
@@ -165,7 +166,7 @@ class Map:
     def __init__(self, width, height):
         self._width = width
         self._height = height
-        self._map_array = [[Tile('#', color=light_gray) for y in range(height)] for x in range(width)]
+        self._map_array = [[Tile(MAP_TILES['wall'], color=light_gray) for y in range(height)] for x in range(width)]
 
     def _get_width(self):
         return self._width
@@ -284,19 +285,19 @@ class Map:
     def create_room(self, room):
         for x in range(room.x1, room.x2):
             for y in range(room.y1, room.y2):
-                self._map_array[x][y].ch = '.'
+                self._map_array[x][y].ch = MAP_TILES['floor']
                 self._map_array[x][y].blocked = False
                 self._map_array[x][y].block_sight = False
 
     def carve_h_tunnel(self, x1, x2, y):
         for x in range(min(x1, x2), max(x1, x2) + 1):
-            self._map_array[x][y].ch = '.'
+            self._map_array[x][y].ch = MAP_TILES['floor']
             self._map_array[x][y].blocked = False
             self._map_array[x][y].block_sight = False
 
     def carve_v_tunnel(self, y1, y2, x):
         for y in range(min(y1, y2), max(y1, y2) + 1):
-            self._map_array[x][y].ch = '.'
+            self._map_array[x][y].ch = MAP_TILES['floor']
             self._map_array[x][y].blocked = False
             self._map_array[x][y].block_sight = False
 
@@ -746,7 +747,7 @@ def cast_heal(amount):
 
 
 
-# TODO: display bug when cancelling targeting (highlight stay until an action is performed)
+
 def target_monster():
     global visible_tiles, entities, map_console, game_map
 
