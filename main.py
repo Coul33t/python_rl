@@ -34,6 +34,7 @@ MAX_ROOM = 30
 MIN_ROOM_SIZE = 5
 MAX_ROOM_SIZE = 15
 
+GLOBAL_MAX_MONSTER = 40
 MAX_MONSTERS = 7
 MAX_ITEMS = 1
 
@@ -48,6 +49,9 @@ light_gray = (150, 150, 150)
 white = (255, 255, 255)
 light_red = (255, 100, 100)
 light_blue = (100, 100, 255)
+
+SWARMER_COLORS = ((139,69,19))
+SWARMER_ALPHA_COLORS = ((199,129,79))
 
 MAP_TILES = {'wall': '#', 'floor': '.'}
 NOT_VISIBLE_COLORS = {'.': (25, 25, 25), '#': (50, 50, 50)}
@@ -248,21 +252,25 @@ class Map:
 
         return 1
 
-    def place_monsters(self, room):
+    def place_monsters(self, room, monster_count):
         global entities
 
         num_monsters = rn.randint(0, MAX_MONSTERS)
 
-        for i in range(num_monsters):
-            x = rn.randint(room.x1, room.x2 - 1)
-            y = rn.randint(room.y1, room.y2 - 1)
+        if not monster_count + num_monsters > GLOBAL_MAX_MONSTER:
 
-            if(rn.random() < 0.8):
-                monster = Object(x, y, 'a', name='Assimilator', color=(139,69,19), class_name=BasicClass(dmg=rn.randint(1,3), death_function=monster_death), ai=BasicMonster())
-            else:
-                monster = Object(x, y, 'A', name='Assimilator Alpha', color=(199,129,79), class_name=BasicClass(dmg=rn.randint(3,10), death_function=monster_death), ai=BasicMonster())
+            for i in range(num_monsters):
+                x = rn.randint(room.x1, room.x2 - 1)
+                y = rn.randint(room.y1, room.y2 - 1)
 
-            entities.append(monster)
+                if(rn.random() < 0.8):
+                    monster = Object(x, y, 's', name='Swarmer', color=(139,69,19), class_name=BasicClass(dmg=rn.randint(1,3), death_function=monster_death, xp_given = 2), ai=BasicMonster())
+                else:
+                    monster = Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(dmg=rn.randint(3,10), death_function=monster_death, xp_given = 15), ai=BasicMonster())
+
+                entities.append(monster)
+
+        return monster_count + num_monsters
 
     def place_items(self, room):
         global entities
@@ -278,9 +286,9 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
             if (rn.random() < 0.95):
-                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, item=Item(use_function=cast_heal, function_parameters=[3,7]))
+                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[3,7]))
             else:
-                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, item=Item(use_function=cast_heal, function_parameters=[50]))
+                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[50]))
 
             entities.append(current_item)
             current_item.send_to_back()
@@ -304,9 +312,19 @@ class Map:
             self._map_array[x][y].blocked = False
             self._map_array[x][y].block_sight = False
 
+    def reset_map(self):
+        self._map_array = [[Tile(MAP_TILES['wall'], color=light_gray) for y in range(self._height)] for x in range(self._width)]
+
     def create_map(self):
+        global entities
+
         rooms = []
         num_rooms = 0
+
+        monster_count = 0
+
+        self.reset_map()
+        initialize_fov()
 
         while num_rooms < MAX_ROOM:
 
@@ -359,13 +377,17 @@ class Map:
                     self.carve_h_tunnel(x, closest_room[0], closest_room[1])
 
             self.place_items(new_room)
-            self.place_monsters(new_room)
+            monster_count = self.place_monsters(new_room, monster_count)
             rooms.append(new_room)
             num_rooms += 1
 
+        entities.insert(0, Object(new_x, new_y, '>', 'stairs', blocks=False, always_visible = True))
+
+        print('Entities number : {}'.format(len(entities)))
+
 
 class Object:
-    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, class_name=None, ai=None, item=None):
+    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, always_visible = False, class_name=None, ai=None, item=None):
         self._x = x
         self._y = y
         self._ch = ch
@@ -373,6 +395,7 @@ class Object:
         self._color = color
         self._bkg_color = bkg_color
         self._blocks = blocks
+        self._always_visible = always_visible
 
         self._class_name = class_name
         if self._class_name:
@@ -441,6 +464,14 @@ class Object:
         self._blocks = blocks
 
     blocks = property(_get_blocks, _set_blocks)
+
+    def _get_always_visible(self):
+        return self._always_visible
+
+    def _set_always_visible(self, always_visible):
+        self._always_visible = always_visible
+
+    always_visible = property(_get_always_visible, _set_always_visible)
 
     def _get_class_name(self):
         return self._class_name
@@ -513,9 +544,11 @@ class Object:
         entities.insert(0, self)
 
     def draw(self, visible_tiles):
-        global entity_console
+        global entity_console, game_map
 
         if (self._x, self._y) in visible_tiles:
+            entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+        elif self._always_visible and game_map.map_array[self._x][self._y].explored:
             entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
 
     def force_draw(self):
@@ -525,13 +558,16 @@ class Object:
 
 
 class BasicClass:
-    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, max_inventory=10, death_function=None):
+    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, max_inventory=10, level = 1, xp = 0, xp_given = 0, death_function=None):
         self._hp = hp
         self._max_hp = hp
         self._stamina = stamina
         self._max_stamina = stamina
         self._defense = defense
         self._dmg = dmg
+        self._level = level
+        self._xp = xp
+        self._xp_given = xp_given
 
         self._max_inventory = max_inventory
         self._inventory = []
@@ -585,6 +621,33 @@ class BasicClass:
         self._dmg = dmg
 
     dmg = property(_get_dmg, _set_dmg)
+
+    def _get_level(self):
+        return self._level
+
+    def _set_level(self, level):
+        self._level = level
+
+    level = property(_get_level, _set_level)
+
+    def _get_xp(self):
+        return self._xp
+
+    def _set_xp(self, xp):
+        self._xp = xp
+
+    xp = property(_get_xp, _set_xp)
+
+    def add_xp(self, xp):
+        self._xp += xp
+
+    def _get_xp_given(self):
+        return self._xp_given
+
+    def _set_xp_given(self, xp_given):
+        self._xp_given = xp_given
+
+    xp_given = property(_get_xp_given, _set_xp_given)
 
     def _get_max_inventory(self):
         return self._max_inventory
@@ -883,6 +946,10 @@ def player_death(player):
 
 
 def monster_death(monster):
+    global player
+
+    player.class_name.xp += monster.class_name.xp_given
+
     message('The {} died.'.format(monster.name), (150,0,0))
     monster.ch = '%'
     monster.color = (150, 0, 0)
@@ -891,6 +958,20 @@ def monster_death(monster):
     monster.ai = None
     monster.name = 'Remains of ' + monster.name + '.'
     monster.send_to_back()
+    
+
+
+def next_level():
+    global current_map_level, game_map, entities
+
+    entities.clear()
+
+    message('You go deeper into the complex ...', (150, 0, 150))
+
+    game_map.create_map()
+    initialize_fov()
+
+    current_map_level += 1
 
 
 
@@ -940,6 +1021,12 @@ def handle_keys():
                 target = player.class_name.ranged_attack(player.class_name.dmg)
                 if target is None:
                     return 'didnt_take_turn'
+
+            elif user_input.keychar is '>':
+                for elem in entities:
+                    if elem.name == 'stairs':
+                        if player.x == elem.x and player.y == elem.y:
+                            next_level()
 
             else:
                 return 'didnt_take_turn'
@@ -1078,7 +1165,7 @@ def help_menu():
 
 
 def render_all():
-    global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count
+    global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count, current_map_level
     visible_tiles = []
 
 
@@ -1122,23 +1209,30 @@ def render_all():
         hp_colors = HP_COLOR[1]
 
 
-    panel_console.draw_str(1, 0, ' ')
-    panel_console.draw_str(1, 0, 'HP', hp_colors[0])
-    render_bar(panel_console, 4, 0, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, hp_colors[0], hp_colors[1])
+
+    panel_console.draw_str(1, 0, 'Level : {}'.format(player.class_name.level))
+
+    panel_console.draw_str(1, 1, 'XP : {}'.format(player.class_name.xp))
+
+    panel_console.draw_str(1, 3, ' ')
+    panel_console.draw_str(1, 3, 'HP', hp_colors[0])
+    render_bar(panel_console, 4, 3, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, hp_colors[0], hp_colors[1])
 
     try:
-        render_bar(panel_console, 4, 1, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
-        panel_console.draw_str(1, 1, 'MN', fg=(75,75,255))
+        render_bar(panel_console, 4, 4, BAR_WIDTH, 'MN', player.class_name.mana, player.class_name.max_mana, (75,75,255), (20,20,80))
+        panel_console.draw_str(1, 4, 'MN', fg=(75,75,255))
     except AttributeError:
-        render_bar(panel_console, 4, 1, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+        render_bar(panel_console, 4, 4, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
     try:
-        render_bar(panel_console, 4, 2, BAR_WIDTH, 'ST', player.class_name.stamina, player.class_name.max_stamina, (255,255,75), (80,80,20))
-        panel_console.draw_str(1, 2, 'ST', fg=(255,255,75))
+        render_bar(panel_console, 4, 5, BAR_WIDTH, 'ST', player.class_name.stamina, player.class_name.max_stamina, (255,255,75), (80,80,20))
+        panel_console.draw_str(1, 5, 'ST', fg=(255,255,75))
     except AttributeError:
-        render_bar(panel_console, 4, 2, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
+        render_bar(panel_console, 4, 5, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
     panel_console.draw_str(1, PANEL_HEIGHT-2, str(turn_count), fg=(75,75,75))
+    panel_console.draw_str(1, PANEL_HEIGHT-3, 'Map level : {}'.format(current_map_level), fg=(150,0,150))
+    
 
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
@@ -1166,8 +1260,6 @@ def render_all():
 
     console.blit(message_console, 0, DUNGEON_DISPLAY_HEIGHT, MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
-
-# GLOBAL VARIABLES DECLARATIONS
 
 
 
@@ -1225,7 +1317,7 @@ def initialize_consoles():
     turn_count = 0
 
 def new_game():
-    global console, map_console, panel_console, message_console, entities, visible_tiles, player, a_star, game_map, game_state, game_messages, game_messages_history, turn_count
+    global console, map_console, panel_console, message_console, entities, visible_tiles, player, a_star, game_map, game_state, game_messages, game_messages_history, turn_count, current_map_level
 
     initialize_consoles()
 
@@ -1245,6 +1337,7 @@ def new_game():
     game_messages = []
     game_messages_history = []
   
+    current_map_level = 1
 
     # Main screen
     for x in range(DUNGEON_DISPLAY_WIDTH):
@@ -1252,7 +1345,7 @@ def new_game():
             console.draw_char(x, y, ' ')
 
 def initialize_fov():
-    global fov_map, fov_recompute
+    global fov_map, fov_recompute, map_console
 
     fov_recompute = True
 
@@ -1261,6 +1354,9 @@ def initialize_fov():
     for x, y in fov_map:
         fov_map.transparent[x, y] = not game_map.map_array[x][y].block_sight
         fov_map.walkable[x, y] = not game_map.map_array[x][y].blocked
+
+    map_console.clear()
+
 
 def play_game():
 
@@ -1295,7 +1391,7 @@ def play_game():
         tdl.flush()
         
 def save_game():
-    global game_map, entities, player, game_messages, game_messages_history, game_state
+    global game_map, entities, player, game_messages, game_messages_history, game_state, current_map_level
 
     file = shelve.open('save', 'n')
 
@@ -1305,6 +1401,7 @@ def save_game():
     file['game_messages'] = game_messages
     file['game_messages_history'] = game_messages_history
     file['game_state'] = game_state
+    file['current_map_level'] = current_map_level
 
     file.close()
 
@@ -1319,6 +1416,7 @@ def load_game():
     game_messages = file['game_messages'] 
     game_messages_history = file['game_messages_history']
     game_state = file['game_state']
+    current_map_level = file['current_map_level']
 
     initialize_consoles()
     initialize_fov()
