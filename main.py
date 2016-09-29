@@ -3,6 +3,9 @@ import sys
 sys.path.append('/usr/local/lib/python3.4/dist-packages')
 
 import tdl
+
+import tcod
+
 import random as rn
 import math
 import textwrap
@@ -46,9 +49,9 @@ white = (255, 255, 255)
 light_red = (255, 100, 100)
 light_blue = (100, 100, 255)
 
-MAP_TILES = {'wall': 0xB2, 'floor': 0xB0}
-NOT_VISIBLE_COLORS = {0xB0: (25, 25, 25), 0xB2: (50, 50, 50)}
-VISIBLE_COLORS = {0xB0: (100, 100, 100), 0xB2: (150, 150, 150)}
+MAP_TILES = {'wall': '#', 'floor': '.'}
+NOT_VISIBLE_COLORS = {'.': (25, 25, 25), '#': (50, 50, 50)}
+VISIBLE_COLORS = {'.': (100, 100, 100), '#': (150, 150, 150)}
 
 BAR_WIDTH = 10
 
@@ -510,15 +513,15 @@ class Object:
         entities.insert(0, self)
 
     def draw(self, visible_tiles):
-        global map_console
+        global entity_console
 
         if (self._x, self._y) in visible_tiles:
-            map_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+            entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
 
     def force_draw(self):
-        global map_console
+        global entity_console
 
-        map_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+        entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
 
 
 class BasicClass:
@@ -1094,14 +1097,17 @@ def render_all():
                 if game_map.map_array[x][y].explored:
                     map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[x][y].ch], bg=game_map.map_array[x][y].bkg_color)
 
+    entity_console.clear()
     # entities
     for entity in entities:
         entity.draw(visible_tiles)
 
     # player
-    map_console.draw_char(player.x, player.y, player.ch, fg=player.color, bg=player.bkg_color)
+    entity_console.draw_char(player.x, player.y, player.ch, fg=player.color, bg=player.bkg_color)
 
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
+
+    console.blit(entity_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0, bgalpha=0.0)
 
     # render player panel
     for x in range(MESSAGE_WIDTH):
@@ -1207,9 +1213,12 @@ def main_menu():
 
 
 def initialize_consoles():
-    global console, map_console, panel_console, message_console, turn_count
+    global console, map_console, panel_console, message_console, entity_console, turn_count
 
     map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
+
+    entity_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
+
     panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
     message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
 
