@@ -1050,7 +1050,18 @@ def check_level_up():
     
 
 
+def random_choice_index(chances):
+    dice = rn.randint(1, sum(chances))
 
+    running_sum = 0
+    choice = 0
+
+    for w in chances:
+        running_sum += w
+
+        if dice <= running_sum:
+            return choice
+        choice += 1
 
 
 def handle_keys():
