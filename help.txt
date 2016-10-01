@@ -21,6 +21,7 @@ movement :
 g : get item (up to one tile)
 
 f : fire mode
-    TAB : switch to next monster
-    SPACE : fire to current monster
-    c : cancel
+|
+|---TAB : switch to next monster
+|---SPACE : fire to current monster
+|---c : cancel

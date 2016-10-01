@@ -14,13 +14,13 @@ import pdb
 
 
 
-CONSOLE_WIDTH = 80
-CONSOLE_HEIGHT = 50
+CONSOLE_WIDTH = 100
+CONSOLE_HEIGHT = 70
 
 MESSAGE_WIDTH = CONSOLE_WIDTH
-MESSAGE_HEIGHT = 8
+MESSAGE_HEIGHT = 12
 
-DUNGEON_DISPLAY_WIDTH = 60
+DUNGEON_DISPLAY_WIDTH = 70
 DUNGEON_DISPLAY_HEIGHT = CONSOLE_HEIGHT-MESSAGE_HEIGHT
 
 PANEL_WIDTH = CONSOLE_WIDTH - DUNGEON_DISPLAY_WIDTH
@@ -57,7 +57,7 @@ MAP_TILES = {'wall': '#', 'floor': '.'}
 NOT_VISIBLE_COLORS = {'.': (25, 25, 25), '#': (50, 50, 50)}
 VISIBLE_COLORS = {'.': (100, 100, 100), '#': (150, 150, 150)}
 
-BAR_WIDTH = 10
+BAR_WIDTH = PANEL_WIDTH - 8
 
 HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (150,0,0)))
 
@@ -264,9 +264,9 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
                 if(rn.random() < 0.8):
-                    monster = Object(x, y, 's', name='Swarmer', color=(139,69,19), class_name=BasicClass(dmg=rn.randint(1,3), death_function=monster_death, xp_given = 2), ai=BasicMonster())
+                    monster = create_monster('Swarmer', x, y)
                 else:
-                    monster = Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(dmg=rn.randint(3,10), death_function=monster_death, xp_given = 15), ai=BasicMonster())
+                    monster = create_monster('Swarmer Alpha', x, y)
 
                 entities.append(monster)
 
@@ -558,13 +558,14 @@ class Object:
 
 
 class BasicClass:
-    def __init__(self, hp=10, stamina=10, defense=0, dmg=2, max_inventory=10, level = 1, xp = 0, xp_given = 0, death_function=None):
+    def __init__(self, hp=10, stamina=10, defense=0, melee_dmg=2, ranged_dmg=1, max_inventory=10, level=1, xp=0, xp_given=0, death_function=None):
         self._hp = hp
         self._max_hp = hp
         self._stamina = stamina
         self._max_stamina = stamina
         self._defense = defense
-        self._dmg = dmg
+        self._melee_dmg = melee_dmg
+        self._ranged_dmg = ranged_dmg
         self._level = level
         self._xp = xp
         self._xp_given = xp_given
@@ -614,13 +615,21 @@ class BasicClass:
 
     defense = property(_get_defense, _set_defense)
 
-    def _get_dmg(self):
-        return self._dmg
+    def _get_melee_dmg(self):
+        return self._melee_dmg
 
-    def _set_dmg(self, dmg):
-        self._dmg = dmg
+    def _set_melee_dmg(self, melee_dmg):
+        self._melee_dmg = melee_dmg
 
-    dmg = property(_get_dmg, _set_dmg)
+    melee_dmg = property(_get_melee_dmg, _set_melee_dmg)
+
+    def _get_ranged_dmg(self):
+        return self._ranged_dmg
+
+    def _set_ranged_dmg(self, ranged_dmg):
+        self._ranged_dmg = ranged_dmg
+
+    ranged_dmg = property(_get_ranged_dmg, _set_ranged_dmg)
 
     def _get_level(self):
         return self._level
@@ -691,7 +700,7 @@ class BasicClass:
 
 
     def attack(self, target):
-        damage = self.dmg - target.class_name.defense
+        damage = self._melee_dmg - target.class_name.defense
 
         color_dmg = (255,255,255)
         color_no_dmg = (255,255,255)
@@ -713,7 +722,7 @@ class BasicClass:
         target = target_monster()
         
         if target is not None:
-            damage = self.dmg - target.class_name.defense
+            damage = self._ranged_dmg/2 - target.class_name.defense
 
             color_dmg = (255,255,255)
             color_no_dmg = (255,255,255)
@@ -797,6 +806,13 @@ class Item:
 
 
 
+def create_monster(monster_name, x, y):
+    if monster_name == 'Swarmer':
+        return Object(x, y, 's', name='Swarmer', color=(139,69,19), class_name=BasicClass(melee_dmg=rn.randint(1,3), death_function=monster_death, xp_given = 100), ai=BasicMonster())
+    elif monster_name == 'Swarmer Alpha':
+        return Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(melee_dmg=rn.randint(3,10), death_function=monster_death, xp_given = 1000), ai=BasicMonster())
+
+
 
 
 def cast_heal(amount):
@@ -818,8 +834,6 @@ def target_monster():
     global visible_tiles, entities, map_console, game_map
 
     targetable_monsters = []
-    untargetable_wall = 0
-    untargetable_monster = 0
 
     # Here, we check for every monsters available to targeting.
     # 1) draw a bresenham line between the player and the entity
@@ -840,13 +854,11 @@ def target_monster():
                     # Wall
                     if game_map.map_array[x][y].blocked:
                         wall = True
-                        untargetable_wall += 1
                     # Monster
                     else:
                         for entity_2 in entities:
                             if (x,y) != (entity.x,entity.y) and (entity_2.x, entity_2.y) == (x,y) and entity_2.blocks:
                                 wall = True
-                                untargetable_monster += 1
                 
                 if not wall:
                     targetable_monsters.append(entity)
@@ -857,7 +869,7 @@ def target_monster():
 
     if len(targetable_monsters) > 0:
 
-        message('Fire mode, choose a target ({} blocked by wall, {} blocked by monsters)'.format(untargetable_wall, untargetable_monster))
+        message('Fire mode, choose a target')
 
         path_to_monster = tdl.map.bresenham(player.x, player.y, targetable_monsters[0].x, targetable_monsters[0].y)
 
@@ -973,6 +985,70 @@ def next_level():
 
     current_map_level += 1
 
+def check_level_up():
+    global player
+
+    to_level = 0
+    next_level = 100*player.class_name.level  
+
+    while player.class_name.xp - next_level >= 0:
+        to_level += 1
+        next_level = 100*(player.class_name.level+to_level)
+        player.class_name.xp  -= next_level
+
+
+    while to_level > 0:
+
+        message('You feel more experimented.')
+        player.class_name.level += 1
+
+        tdl.flush()
+        render_all()
+        tdl.flush()
+
+        choice = None
+
+        while choice == None:
+            choice = menu('Level up ! Choose a skill to improve:\n',
+                          ['Meatbag (+15HP)',
+                           'Tough guy (+5 HP, +1 armor)',
+                           'Brawler (+5 HP, +1 Melee damage)',
+                           'Brute (+3 Melee damage)',
+                           'Gunner (+2 ranged damage)'], MAP_WIDTH)
+
+
+            if choice == 0:
+                player.class_name.max_hp += 15
+                player.class_name.hp += 15
+
+            elif choice == 1:
+                player.class_name.max_hp += 5
+                player.class_name.hp += 5
+                player.class_name.defense += 1
+
+            elif choice == 2:
+                player.class_name.max_hp += 5
+                player.class_name.hp += 5
+                player.class_name.melee_dmg += 1
+
+            elif choice == 3:
+                player.class_name.melee_dmg += 3
+
+            elif choice == 4:
+                player.class_name.ranged_dmg += 2
+
+        to_level -= 1
+        
+        tdl.flush()
+        render_all()
+        tdl.flush()
+
+    tdl.flush()
+    render_all()
+    tdl.flush()
+
+    
+
 
 
 
@@ -998,6 +1074,11 @@ def handle_keys():
             help_menu()
             return 'didnt_take_turn'
 
+        if user_input.keychar == 'c':
+            character_stats()
+            return 'didnt_take_turn'
+
+
         if game_state == 'playing':
 
             if user_input.key in MOVEMENT_KEYS:
@@ -1018,7 +1099,7 @@ def handle_keys():
                     return 'didnt_take_turn'
 
             elif user_input.keychar is 'f':
-                target = player.class_name.ranged_attack(player.class_name.dmg)
+                target = player.class_name.ranged_attack(player.class_name.ranged_dmg)
                 if target is None:
                     return 'didnt_take_turn'
 
@@ -1101,6 +1182,9 @@ def menu(header, options, width, options_colors=None):
         if not options:
             return None
 
+        if type(user_input.keychar) is not str or len(user_input.keychar) > 1:
+            return None
+
         index = ord(user_input.keychar) - ord('a')
 
         # Because if the inventory is empty, there's still a (a) option
@@ -1126,7 +1210,7 @@ def inventory_menu(header):
     return player.class_name.inventory[index].item
 
 
-def text_window(header, text):
+def text_window(header, text, is_file=False):
 
     width = DUNGEON_DISPLAY_WIDTH-3
     height = DUNGEON_DISPLAY_HEIGHT-3
@@ -1139,8 +1223,13 @@ def text_window(header, text):
 
     lines = []
 
-    for line in text:
-        lines.append(textwrap.wrap(line, width-2))
+    if is_file:
+        for line in text:
+            lines.append(textwrap.wrap(line, width-2))
+
+    else:
+        for line in text:
+            lines.append(textwrap.wrap(line, width-2))
 
     y = 2
     for line_to_print in lines:
@@ -1159,9 +1248,20 @@ def text_window(header, text):
 
 
 
+def character_stats():
+    global player
+
+    text_window('Character Informations',
+                ['Level         : {}'.format(player.class_name.level), '',
+                 'XP            : {}'.format(player.class_name.xp), '',
+                 'HP            : {}/{}'.format(player.class_name.hp, player.class_name.max_hp), '',
+                 'Defense       : {}'.format(player.class_name.defense), '',
+                 'Melee damage  : {}'.format(player.class_name.melee_dmg), '',
+                 'Ranged damage : {}'.format(player.class_name.ranged_dmg)])
+
 def help_menu():
     text = [line.rstrip('\n') for line in open('help.txt')]
-    text_window('Help', text)
+    text_window('Help', text, is_file=True)
 
 
 def render_all():
@@ -1197,8 +1297,8 @@ def render_all():
     console.blit(entity_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0, bgalpha=0.0)
 
     # render player panel
-    for x in range(MESSAGE_WIDTH):
-        for y in range(3):
+    for x in range(PANEL_WIDTH):
+        for y in range(PANEL_HEIGHT):
             panel_console.draw_char(x, y, ' ')
 
 
@@ -1209,12 +1309,14 @@ def render_all():
         hp_colors = HP_COLOR[1]
 
 
+    #panel_console.draw_str(1, 0, 'Level : {}'.format(player.class_name.level))
 
     panel_console.draw_str(1, 0, 'Level : {}'.format(player.class_name.level))
 
-    panel_console.draw_str(1, 1, 'XP : {}'.format(player.class_name.xp))
+    panel_console.draw_str(1, 1, 'XP : {} (next level : {})'.format(player.class_name.xp, 100*player.class_name.level - player.class_name.xp))
 
-    panel_console.draw_str(1, 3, ' ')
+    
+
     panel_console.draw_str(1, 3, 'HP', hp_colors[0])
     render_bar(panel_console, 4, 3, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, hp_colors[0], hp_colors[1])
 
@@ -1230,8 +1332,9 @@ def render_all():
     except AttributeError:
         render_bar(panel_console, 4, 5, BAR_WIDTH, 'X', BAR_WIDTH, BAR_WIDTH, (75,75,75), (75,75,75))
 
-    panel_console.draw_str(1, PANEL_HEIGHT-2, str(turn_count), fg=(75,75,75))
-    panel_console.draw_str(1, PANEL_HEIGHT-3, 'Map level : {}'.format(current_map_level), fg=(150,0,150))
+
+    panel_console.draw_str(1, PANEL_HEIGHT-1, 'Turn {}'.format(turn_count), fg=(75,75,75))
+    panel_console.draw_str(1, PANEL_HEIGHT-2, 'Map level : {}'.format(current_map_level), fg=(150,0,150))
     
 
     for x in range(0, PANEL_WIDTH):
@@ -1324,7 +1427,7 @@ def new_game():
     entities = []
     visible_tiles = []
 
-    player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, dmg=5, death_function=player_death))
+    player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, melee_dmg=5, ranged_dmg=2, death_function=player_death))
 
     game_map = Map(MAP_WIDTH, MAP_HEIGHT)
     game_map.create_map()
@@ -1377,9 +1480,11 @@ def play_game():
             break
 
         elif game_state == 'playing' and player_action != 'didnt_take_turn':
+            check_level_up()
             for entity in entities:
                 if entity.ai is not None:
                     entity.ai.take_turn()
+
 
 
         turn_count += 1
@@ -1424,7 +1529,7 @@ def load_game():
 def main():
     global console
 
-    tdl.set_font('SFE_Curses_square_16x16.png')
+    tdl.set_font('Cheepicus_12x12.png')
     console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
 
     main_menu()
