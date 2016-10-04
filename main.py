@@ -63,6 +63,8 @@ HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (15
 
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
+MONSTER_CHANCE = {'Swarmer':95, 'Swarmer Alpha':5}
+ITEM_CHANCE = {'Health potion':95, 'Super health potion':5}
 
 class Rect:
     def __init__(self, x, y, w, h):
@@ -263,9 +265,10 @@ class Map:
                 x = rn.randint(room.x1, room.x2 - 1)
                 y = rn.randint(room.y1, room.y2 - 1)
 
-                if(rn.random() < 0.8):
+                choice = random_choice(MONSTER_CHANCE)
+                if choice == 'Swarmer':
                     monster = create_monster('Swarmer', x, y)
-                else:
+                elif choice == 'Swarmer Alpha':
                     monster = create_monster('Swarmer Alpha', x, y)
 
                 entities.append(monster)
@@ -285,13 +288,17 @@ class Map:
                 x = rn.randint(room.x1, room.x2 - 1)
                 y = rn.randint(room.y1, room.y2 - 1)
 
-            if (rn.random() < 0.95):
-                current_item = Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[3,7]))
-            else:
-                current_item = Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[50]))
+            choice = random_choice(ITEM_CHANCE)
+            if choice == 'Health potion':
+                item = create_item('Health potion', x, y)
+            elif choice == 'Super health potion':
+                item = create_item('Super health potion', x, y)
 
-            entities.append(current_item)
-            current_item.send_to_back()
+            if item is None:
+                print(choice)
+
+            entities.append(item)
+            item.send_to_back()
 
     def create_room(self, room):
         for x in range(room.x1, room.x2):
@@ -313,7 +320,15 @@ class Map:
             self._map_array[x][y].block_sight = False
 
     def reset_map(self):
+        global entities
+
         self._map_array = [[Tile(MAP_TILES['wall'], color=light_gray) for y in range(self._height)] for x in range(self._width)]
+
+        for elem in entities:
+            if elem.ai is not None:
+                entities.remove(elem)
+            elif elem.item is not None:
+                entities.remove(item)
 
     def create_map(self):
         global entities
@@ -722,7 +737,7 @@ class BasicClass:
         target = target_monster()
         
         if target is not None:
-            damage = self._ranged_dmg/2 - target.class_name.defense
+            damage = self._ranged_dmg - target.class_name.defense
 
             color_dmg = (255,255,255)
             color_no_dmg = (255,255,255)
@@ -813,6 +828,13 @@ def create_monster(monster_name, x, y):
         return Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(melee_dmg=rn.randint(3,10), death_function=monster_death, xp_given = 1000), ai=BasicMonster())
 
 
+
+
+def create_item(item_name, x, y):
+    if item_name == 'Health potion':
+        return Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[3,7]))
+    elif item_name == 'Super health potion':
+        return Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[50]))
 
 
 def cast_heal(amount):
@@ -1048,6 +1070,13 @@ def check_level_up():
     tdl.flush()
 
     
+
+
+def random_choice(chances_dict):
+    chances = list(chances_dict.values())
+    strings = list(chances_dict.keys())
+
+    return strings[random_choice_index(chances)]
 
 
 def random_choice_index(chances):
