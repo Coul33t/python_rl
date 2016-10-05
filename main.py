@@ -64,7 +64,7 @@ HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (15
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
 MONSTER_CHANCE = {'Swarmer':95, 'Swarmer Alpha':5}
-ITEM_CHANCE = {'Health potion':95, 'Super health potion':5}
+ITEM_CHANCE = {'Health potion':85, 'Super health potion':5, 'Crowbar':10}
 
 class Rect:
     def __init__(self, x, y, w, h):
@@ -293,6 +293,8 @@ class Map:
                 item = create_item('Health potion', x, y)
             elif choice == 'Super health potion':
                 item = create_item('Super health potion', x, y)
+            elif choice == 'Crowbar':
+                item = create_item('Crowbar', x, y)
 
             if item is None:
                 print(choice)
@@ -402,7 +404,7 @@ class Map:
 
 
 class Object:
-    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, always_visible = False, class_name=None, ai=None, item=None):
+    def __init__(self, x, y, ch, name='DEFAULT_NAME', color=white, bkg_color=None, blocks=True, always_visible = False, class_name=None, ai=None, item=None, equipement=None):
         self._x = x
         self._y = y
         self._ch = ch
@@ -422,6 +424,12 @@ class Object:
 
         self._item = item
         if self._item:
+            self._item.owner = self
+
+        self._equipement = equipement
+        if self._equipement:
+            self._equipement.owner = self
+            self._item = Item()
             self._item.owner = self
 
     def _get_x(self):
@@ -512,6 +520,14 @@ class Object:
 
     item = property(_get_item, _set_item)
 
+    def _get_equipement(self):
+        return self._equipement
+
+    def _set_equipement(self, equipement):
+        self._equipement = equipement
+
+    equipement = property(_get_equipement, _set_equipement)
+
     def move(self, delta):
         global game_map
 
@@ -591,7 +607,8 @@ class BasicClass:
         self._death_function = death_function
 
     def _get_max_hp(self):
-        return self._max_hp
+        bonus = sum(equipement.max_hp_bonus for equipement in get_all_equipped(self.owner))
+        return self._max_hp + bonus
 
     def _set_max_hp(self, max_hp):
         self._max_hp = max_hp
@@ -615,7 +632,8 @@ class BasicClass:
     stamina = property(_get_stamina, _set_stamina)
 
     def _get_max_stamina(self):
-        return self._max_stamina
+        bonus = sum(equipement.max_stamina_bonus for equipement in get_all_equipped(self.owner))
+        return self._max_stamina + bonus
 
     def _set_max_stamina(self, max_stamina):
         self._max_stamina = max_stamina
@@ -623,7 +641,8 @@ class BasicClass:
     max_stamina = property(_get_max_stamina, _set_max_stamina)
 
     def _get_defense(self):
-        return self._defense
+        bonus = sum(equipement.defense_bonus for equipement in get_all_equipped(self.owner))
+        return self._defense + bonus
 
     def _set_defense(self, defense):
         self._defense = defense
@@ -631,7 +650,8 @@ class BasicClass:
     defense = property(_get_defense, _set_defense)
 
     def _get_melee_dmg(self):
-        return self._melee_dmg
+        bonus = sum(equipement.melee_dmg_bonus for equipement in get_all_equipped(self.owner))
+        return self._melee_dmg + bonus
 
     def _set_melee_dmg(self, melee_dmg):
         self._melee_dmg = melee_dmg
@@ -639,7 +659,8 @@ class BasicClass:
     melee_dmg = property(_get_melee_dmg, _set_melee_dmg)
 
     def _get_ranged_dmg(self):
-        return self._ranged_dmg
+        bonus = sum(equipement.ranged_dmg_bonus for equipement in get_all_equipped(self.owner))
+        return self._ranged_dmg + bonus
 
     def _set_ranged_dmg(self, ranged_dmg):
         self._ranged_dmg = ranged_dmg
@@ -706,7 +727,7 @@ class BasicClass:
         if damage > 0:
             self._hp -= damage
 
-        if self._hp <= 0:
+        if self._get_hp() <= 0:
             function = self.death_function
 
             if function is not None:
@@ -715,7 +736,7 @@ class BasicClass:
 
 
     def attack(self, target):
-        damage = self._melee_dmg - target.class_name.defense
+        damage = self._get_melee_dmg() - target.class_name.defense
 
         color_dmg = (255,255,255)
         color_no_dmg = (255,255,255)
@@ -737,7 +758,7 @@ class BasicClass:
         target = target_monster()
         
         if target is not None:
-            damage = self._ranged_dmg - target.class_name.defense
+            damage = self._get_ranged_dmg() - target.class_name.defense
 
             color_dmg = (255,255,255)
             color_no_dmg = (255,255,255)
@@ -808,16 +829,129 @@ class Item:
     use_function = property(_get_use_function, _set_use_function)
 
     def pick_up(self):
+        global entities
+
         player.class_name.add_to_inventory(self.owner)
         entities.remove(self.owner)
         message('You picked up a {}.'.format(self.owner.name))
 
+    def drop(self):
+        global entities
+
+        if self.owner.equippement:
+            self.owner.equipement.desequip()
+
+        self.owner.x = player.x
+        self.owner.y = player.y
+
+        entities.append(self.owner)
+        self.owner.inventory.remove(self.owner)
+
+        message('You dropped a ' + self.owner.name + '.', (0,150,150))
+
+
     def use(self):
-        if self._use_function == None:
+        if self.owner.equipement:
+            self.owner.equipement.toggle_equipped()
+
+        elif self._use_function == None:
             message('The {} can\'t be used.'.format(self.owner.name))
+
         else:
             if self._use_function(self._function_parameters) != 'cancelled':
                 player.class_name.inventory.remove(self.owner)
+
+
+class Equipement:
+    def __init__(self, slot, max_hp_bonus=0, max_stamina_bonus=0, melee_dmg_bonus=0, ranged_dmg_bonus=0, defense_bonus=0):
+        self._slot = slot
+
+        self._is_equipped = False
+
+        self._max_hp_bonus = max_hp_bonus
+        self._max_stamina_bonus = max_stamina_bonus
+        self._melee_dmg_bonus = melee_dmg_bonus
+        self._ranged_dmg_bonus = ranged_dmg_bonus
+        self._defense_bonus = defense_bonus
+
+    def _get_slot(self):
+        return self._slot
+
+    def _set_slot(self, slot):
+        self._slot = slot
+
+    slot = property(_get_slot, _set_slot)
+
+    def _get_is_equipped(self):
+        return self._is_equipped
+
+    def _set_is_equipped(self, is_equipped):
+        self._is_equipped = is_equipped
+
+    is_equipped = property(_get_is_equipped, _set_is_equipped)
+
+    def _get_max_hp_bonus(self):
+        return self._max_hp_bonus
+
+    def _set_max_hp_bonus(self, max_hp_bonus):
+        self._max_hp_bonus = max_hp_bonus
+
+    max_hp_bonus = property(_get_max_hp_bonus, _set_max_hp_bonus)
+
+    def _get_max_stamina_bonus(self):
+        return self._max_stamina_bonus
+
+    def _set_max_stamina_bonus(self, max_stamina_bonus):
+        self._max_stamina_bonus = max_stamina_bonus
+
+    max_stamina_bonus = property(_get_max_stamina_bonus, _set_max_stamina_bonus)
+
+    def _get_melee_dmg_bonus(self):
+        return self._melee_dmg_bonus
+
+    def _set_melee_dmg_bonus(self, melee_dmg_bonus):
+        self._melee_dmg_bonus = melee_dmg_bonus
+
+    melee_dmg_bonus = property(_get_melee_dmg_bonus, _set_melee_dmg_bonus)
+
+    def _get_ranged_dmg_bonus(self):
+        return self._ranged_dmg_bonus
+
+    def _set_ranged_dmg_bonus(self, ranged_dmg_bonus):
+        self._ranged_dmg_bonus = ranged_dmg_bonus
+
+    ranged_dmg_bonus = property(_get_ranged_dmg_bonus, _set_ranged_dmg_bonus)
+
+    def _get_defense_bonus(self):
+        return self._defense_bonus
+
+    def _set_defense_bonus(self, defense_bonus):
+        self._defense_bonus = defense_bonus
+
+    defense_bonus = property(_get_defense_bonus, _set_defense_bonus)
+
+
+    def toggle_equipped(self):
+        if self._is_equipped:
+            self.desequip()
+        else:
+            self.equip()
+
+    def equip(self):
+        equipped = check_slot(self._slot)
+        if equipped:
+            equipped.equipement.desequip()
+
+        self._is_equipped = True
+        message('Equipped ' + self.owner.name + ' from ' + self._slot + '.', (0,150,150))
+
+    def desequip(self):
+        if not self._is_equipped:
+            return
+
+        self._is_equipped = False
+        message('Desequipped ' + self.owner.name + ' from ' + self._slot + '.', (0,150,150))
+
 
 
 
@@ -828,13 +962,42 @@ def create_monster(monster_name, x, y):
         return Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(melee_dmg=rn.randint(3,10), death_function=monster_death, xp_given = 1000), ai=BasicMonster())
 
 
-
-
 def create_item(item_name, x, y):
     if item_name == 'Health potion':
         return Object(x, y, 0x03, name='Health potion', color=(150, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[3,7]))
     elif item_name == 'Super health potion':
         return Object(x, y, 0x03, name='Super health potion', color=(255, 0, 0), blocks=False, always_visible = True, item=Item(use_function=cast_heal, function_parameters=[50]))
+    elif item_name == 'Crowbar':
+        return Object(x, y, 0xF4, name='Crowbar', color=(150, 0, 0), blocks=False, always_visible = True, equipement=Equipement(slot='right hand', melee_dmg_bonus=3))
+
+
+
+
+
+def check_slot(slot):
+    global player
+
+    for elem in player.class_name.inventory:
+        if elem.equipement and elem.equipement.slot == slot and elem.equipement.is_equipped:
+            return elem
+    return None
+
+def get_all_equipped(obj):
+    
+    if obj == player:
+        equipped_list = []
+        
+        for item in obj.class_name.inventory:
+            if item.equipement and item.equipement.is_equipped:
+                equipped_list.append(item.equipement)
+
+        return equipped_list
+
+    else:
+        return []
+
+
+
 
 
 def cast_heal(amount):
@@ -1015,7 +1178,7 @@ def check_level_up():
 
     while player.class_name.xp - next_level >= 0:
         to_level += 1
-        next_level = 100*(player.class_name.level+to_level)
+        next_level = 100*(player.class_name.level)
         player.class_name.xp  -= next_level
 
 
@@ -1239,7 +1402,16 @@ def inventory_menu(header):
     options_colors = []
 
     if player.class_name.inventory:
-        options = [item.name for item in player.class_name.inventory]
+        for item in player.class_name.inventory:
+
+            item_name = item.name
+
+            if item.equipement:
+                if item.equipement.is_equipped:
+                    item_name = '[E] ' + item.name                
+
+            options.append(item_name)
+
         options_colors = [item.color for item in player.class_name.inventory]
 
     index = menu(header, options, INVENTORY_WIDTH, options_colors=options_colors)
@@ -1468,6 +1640,8 @@ def new_game():
     visible_tiles = []
 
     player = Object(x=0, y=0, ch='@', name='Player', class_name=BasicClass(hp=30, defense=2, melee_dmg=5, ranged_dmg=2, death_function=player_death))
+
+    player.class_name.inventory.append(create_item('Crowbar', 0, 0))
 
     game_map = Map(MAP_WIDTH, MAP_HEIGHT)
     game_map.create_map()
