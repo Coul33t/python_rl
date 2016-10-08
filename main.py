@@ -12,6 +12,8 @@ import textwrap
 import shelve
 import pdb
 
+from collections import OrderedDict
+
 
 
 CONSOLE_WIDTH = 100
@@ -65,6 +67,13 @@ MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], '
 
 MONSTER_CHANCE = {'Swarmer':95, 'Swarmer Alpha':5}
 ITEM_CHANCE = {'Health potion':85, 'Super health potion':5, 'Crowbar':10}
+
+# Name / Base cost, Multiplier, Current level, Tooltip
+SKILLS_LIST = OrderedDict([('Meatbag',   [75, 1.5, 0, '(+15HP)']),
+                           ('Tough guy', [125, 2, 0, '(+5 HP, +1 armor)']),
+                           ('Brawler',   [85, 1.5, 0, '(+5 HP, +1 Melee damage)']),
+                           ('Brute',     [100, 1.3, 0, '(+3 Melee damage)']),
+                           ('Gunner',    [100, 1.5, 0, '(+2 ranged damage)'])])
 
 class Rect:
     def __init__(self, x, y, w, h):
@@ -289,15 +298,13 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
             choice = random_choice(ITEM_CHANCE)
+            
             if choice == 'Health potion':
                 item = create_item('Health potion', x, y)
             elif choice == 'Super health potion':
                 item = create_item('Super health potion', x, y)
             elif choice == 'Crowbar':
                 item = create_item('Crowbar', x, y)
-
-            if item is None:
-                print(choice)
 
             entities.append(item)
             item.send_to_back()
@@ -399,8 +406,6 @@ class Map:
             num_rooms += 1
 
         entities.insert(0, Object(new_x, new_y, '>', 'stairs', blocks=False, always_visible = True))
-
-        print('Entities number : {}'.format(len(entities)))
 
 
 class Object:
@@ -957,9 +962,9 @@ class Equipement:
 
 def create_monster(monster_name, x, y):
     if monster_name == 'Swarmer':
-        return Object(x, y, 's', name='Swarmer', color=(139,69,19), class_name=BasicClass(melee_dmg=rn.randint(1,3), death_function=monster_death, xp_given = 100), ai=BasicMonster())
+        return Object(x, y, 's', name='Swarmer', color=(139,69,19), class_name=BasicClass(melee_dmg=rn.randint(1,3), death_function=monster_death, xp_given = 10), ai=BasicMonster())
     elif monster_name == 'Swarmer Alpha':
-        return Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(melee_dmg=rn.randint(3,10), death_function=monster_death, xp_given = 1000), ai=BasicMonster())
+        return Object(x, y, 'S', name='Swarmer Alpha', color=(199,129,79), class_name=BasicClass(melee_dmg=rn.randint(3,10), death_function=monster_death, xp_given = 100), ai=BasicMonster())
 
 
 def create_item(item_name, x, y):
@@ -1170,6 +1175,7 @@ def next_level():
 
     current_map_level += 1
 
+#CURRENTLY UNUSED
 def check_level_up():
     global player
 
@@ -1232,7 +1238,84 @@ def check_level_up():
     render_all()
     tdl.flush()
 
+def level_up_screen():
+    global player
+
+    header = 'Level up screen'
+
+    options = []
+    skills_list_helper = []
+    skill_cost = []
     
+    for i, skill in enumerate(SKILLS_LIST):
+        skills_list_helper.append(skill)
+        skill_cost.append(SKILLS_LIST[skill][0] + (SKILLS_LIST[skill][0] * SKILLS_LIST[skill][1] * SKILLS_LIST[skill][2]))
+        
+        # Name / Base cost, Multiplier, Current level, Tooltip
+        options.append('{} {} level : {} cost to next : {}'.format(skill,
+                                                                   SKILLS_LIST[skill][3],
+                                                                   SKILLS_LIST[skill][2],
+                                                                   skill_cost[i]))
+
+    options_colors = []
+
+    for i, opt in enumerate(options):
+        if skill_cost[i] <= player.class_name.xp:
+            options_colors.append((255,255,255))
+        else:
+            options_colors.append((50,50,50))
+
+
+    choice = menu(header, options, CONSOLE_WIDTH - 2, options_colors)
+
+    tdl.flush()
+    render_all()
+    tdl.flush()
+
+    if choice is not None:
+        if choice > len(SKILLS_LIST):
+            return
+    else:
+        return
+
+    if options_colors[choice] == (255,255,255):
+        if choice == 0:
+            player.class_name.max_hp += 15
+            player.class_name.hp += 15
+
+        elif choice == 1:
+            player.class_name.max_hp += 5
+            player.class_name.hp += 5
+            player.class_name.defense += 1
+
+        elif choice == 2:
+            player.class_name.max_hp += 5
+            player.class_name.hp += 5
+            player.class_name.melee_dmg += 1
+
+        elif choice == 3:
+            player.class_name.melee_dmg += 3
+
+        elif choice == 4:
+            player.class_name.ranged_dmg += 2
+
+        if SKILLS_LIST[skills_list_helper[choice]][2] == 0:
+            message('You learned {}.'.format(skills_list_helper[choice]))
+        else:
+            message('You improved {}.'.format(skills_list_helper[choice]))
+
+        player.class_name.xp = int(player.class_name.xp - skill_cost[choice])
+        SKILLS_LIST[skills_list_helper[choice]][2] += 1
+
+
+    else:
+        message('You don\'t have enough xp for that.')
+
+    tdl.flush()
+    render_all()
+    tdl.flush()
+
+
 
 
 def random_choice(chances_dict):
@@ -1281,6 +1364,9 @@ def handle_keys():
             character_stats()
             return 'didnt_take_turn'
 
+        if user_input.keychar == 'l':
+            level_up_screen()
+            return 'didnt_take_turn'
 
         if game_state == 'playing':
 
@@ -1311,6 +1397,7 @@ def handle_keys():
                     if elem.name == 'stairs':
                         if player.x == elem.x and player.y == elem.y:
                             next_level()
+
 
             else:
                 return 'didnt_take_turn'
@@ -1349,7 +1436,7 @@ def message(new_msg, color=(255, 255, 255)):
 
 
 def menu(header, options, width, options_colors=None):
-    height = 15
+    height = CONSOLE_HEIGHT - 2 - MESSAGE_HEIGHT
     menu_console = tdl.Console(width, height)
     menu_console.set_colors(bg=(10,10,50))
     menu_console.draw_rect(0,0,None,None,None, bg=(10,10,50))
@@ -1371,6 +1458,9 @@ def menu(header, options, width, options_colors=None):
 
     x = int(DUNGEON_DISPLAY_WIDTH/2) - int(width/2)
     y = int(DUNGEON_DISPLAY_HEIGHT/2) - int(height/2)
+
+    x = 1
+    y = 1
 
     console.blit(menu_console, x, y, width, height, 0, 0)
 
@@ -1520,14 +1610,9 @@ def render_all():
     elif player.class_name.hp <= player.class_name.max_hp/2:
         hp_colors = HP_COLOR[1]
 
-
-    #panel_console.draw_str(1, 0, 'Level : {}'.format(player.class_name.level))
-
     panel_console.draw_str(1, 0, 'Level : {}'.format(player.class_name.level))
-
-    panel_console.draw_str(1, 1, 'XP : {} (next level : {})'.format(player.class_name.xp, 100*player.class_name.level - player.class_name.xp))
-
-    
+    panel_console.draw_str(1, 1, 'XP : {}'.format(player.class_name.xp))
+    #panel_console.draw_str(1, 1, 'XP : {} (next level : {})'.format(player.class_name.xp, 100*player.class_name.level - player.class_name.xp))
 
     panel_console.draw_str(1, 3, 'HP', hp_colors[0])
     render_bar(panel_console, 4, 3, BAR_WIDTH, 'HP', player.class_name.hp, player.class_name.max_hp, hp_colors[0], hp_colors[1])
@@ -1694,7 +1779,6 @@ def play_game():
             break
 
         elif game_state == 'playing' and player_action != 'didnt_take_turn':
-            check_level_up()
             for entity in entities:
                 if entity.ai is not None:
                     entity.ai.take_turn()
