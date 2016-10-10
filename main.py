@@ -12,29 +12,32 @@ import textwrap
 import shelve
 import pdb
 
+import sys
+
+#Useful for the skill list
 from collections import OrderedDict
 
 
 
-CONSOLE_WIDTH = 100
-CONSOLE_HEIGHT = 70
+CONSOLE_WIDTH = 90
+CONSOLE_HEIGHT = 50
 
 MESSAGE_WIDTH = CONSOLE_WIDTH
 MESSAGE_HEIGHT = 12
 
-DUNGEON_DISPLAY_WIDTH = 70
+DUNGEON_DISPLAY_WIDTH = 60
 DUNGEON_DISPLAY_HEIGHT = CONSOLE_HEIGHT-MESSAGE_HEIGHT
 
 PANEL_WIDTH = CONSOLE_WIDTH - DUNGEON_DISPLAY_WIDTH
 PANEL_HEIGHT = CONSOLE_HEIGHT - MESSAGE_HEIGHT
 
-MAP_WIDTH = DUNGEON_DISPLAY_WIDTH
-MAP_HEIGHT = DUNGEON_DISPLAY_HEIGHT
+MAP_WIDTH = 200
+MAP_HEIGHT = 200
 
 MIN_ROOM = 5
 MAX_ROOM = 30
-MIN_ROOM_SIZE = 5
-MAX_ROOM_SIZE = 15
+MIN_ROOM_SIZE = 3
+MAX_ROOM_SIZE = 10
 
 GLOBAL_MAX_MONSTER = 40
 MAX_MONSTERS = 7
@@ -63,6 +66,8 @@ BAR_WIDTH = PANEL_WIDTH - 8
 
 HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (150,0,0)))
 
+MESSAGE_COLORS = {'combat':(255,255,150), 'player_combat':(255,255,200)}
+
 MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
 
 MONSTER_CHANCE = {'Swarmer':95, 'Swarmer Alpha':5}
@@ -74,6 +79,8 @@ SKILLS_LIST = OrderedDict([('Meatbag',   [75, 1.5, 0, '(+15HP)']),
                            ('Brawler',   [85, 1.5, 0, '(+5 HP, +1 Melee damage)']),
                            ('Brute',     [100, 1.3, 0, '(+3 Melee damage)']),
                            ('Gunner',    [100, 1.5, 0, '(+2 ranged damage)'])])
+
+MOUSE_COORD = {'x':0, 'y':0}
 
 class Rect:
     def __init__(self, x, y, w, h):
@@ -579,13 +586,16 @@ class Object:
         entities.remove(self)
         entities.insert(0, self)
 
-    def draw(self, visible_tiles):
+    def draw(self, visible_tiles, boundaries):
         global entity_console, game_map
 
+        true_x = self._x - boundaries[0]
+        true_y = self._y - boundaries[1]
+
         if (self._x, self._y) in visible_tiles:
-            entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+            entity_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
         elif self._always_visible and game_map.map_array[self._x][self._y].explored:
-            entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+            entity_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
 
     def force_draw(self):
         global entity_console
@@ -743,19 +753,17 @@ class BasicClass:
     def attack(self, target):
         damage = self._get_melee_dmg() - target.class_name.defense
 
-        color_dmg = (255,255,255)
-        color_no_dmg = (255,255,255)
+        msg_color = MESSAGE_COLORS['combat']
 
         if self.owner.name == 'Player':
-            color_dmg = (255,255,255)
-            color_no_dmg = (255,255,255)
+            msg_color = MESSAGE_COLORS['player_combat']
 
         if damage > 0:
-            message('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)), color_dmg)
+            message('{} attacks {} for {} damage.'.format(self.owner.name, target.name, str(damage)), msg_color)
             target.class_name.take_damage(damage)
 
         else:
-            message('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
+            message('The {} attack doesn\'t scratch the {}'.format(self.owner.name, target.name), msg_color)
 
 
 
@@ -764,20 +772,20 @@ class BasicClass:
         
         if target is not None:
             damage = self._get_ranged_dmg() - target.class_name.defense
+        else:
+            return False
 
-            color_dmg = (255,255,255)
-            color_no_dmg = (255,255,255)
+        msg_color = MESSAGE_COLORS['combat']
 
-            if self.owner.name == 'Player':
-                color_dmg = (255,255,255)
-                color_no_dmg = (255,255,255)
+        if self.owner.name == 'Player':
+            msg_color = MESSAGE_COLORS['player_combat']
 
             if damage > 0:
-                message('{} attacks {} from affar for {} damage.'.format(self.owner.name, target.name, str(damage)), color_dmg)
+                message('{} attacks {} from affar for {} damage.'.format(self.owner.name, target.name, str(damage)), msg_color)
                 target.class_name.take_damage(damage)
 
             else:
-                message('The {} ranged attack doesn\'t scratch the {}'.format(self.owner.name, target.name), color_no_dmg)
+                message('The {} ranged attack doesn\'t scratch the {}'.format(self.owner.name, target.name), msg_color)
 
         return target
 
@@ -1238,83 +1246,6 @@ def check_level_up():
     render_all()
     tdl.flush()
 
-def level_up_screen():
-    global player
-
-    header = 'Level up screen'
-
-    options = []
-    skills_list_helper = []
-    skill_cost = []
-    
-    for i, skill in enumerate(SKILLS_LIST):
-        skills_list_helper.append(skill)
-        skill_cost.append(SKILLS_LIST[skill][0] + (SKILLS_LIST[skill][0] * SKILLS_LIST[skill][1] * SKILLS_LIST[skill][2]))
-        
-        # Name / Base cost, Multiplier, Current level, Tooltip
-        options.append('{} {} level : {} cost to next : {}'.format(skill,
-                                                                   SKILLS_LIST[skill][3],
-                                                                   SKILLS_LIST[skill][2],
-                                                                   skill_cost[i]))
-
-    options_colors = []
-
-    for i, opt in enumerate(options):
-        if skill_cost[i] <= player.class_name.xp:
-            options_colors.append((255,255,255))
-        else:
-            options_colors.append((50,50,50))
-
-
-    choice = menu(header, options, CONSOLE_WIDTH - 2, options_colors)
-
-    tdl.flush()
-    render_all()
-    tdl.flush()
-
-    if choice is not None:
-        if choice > len(SKILLS_LIST):
-            return
-    else:
-        return
-
-    if options_colors[choice] == (255,255,255):
-        if choice == 0:
-            player.class_name.max_hp += 15
-            player.class_name.hp += 15
-
-        elif choice == 1:
-            player.class_name.max_hp += 5
-            player.class_name.hp += 5
-            player.class_name.defense += 1
-
-        elif choice == 2:
-            player.class_name.max_hp += 5
-            player.class_name.hp += 5
-            player.class_name.melee_dmg += 1
-
-        elif choice == 3:
-            player.class_name.melee_dmg += 3
-
-        elif choice == 4:
-            player.class_name.ranged_dmg += 2
-
-        if SKILLS_LIST[skills_list_helper[choice]][2] == 0:
-            message('You learned {}.'.format(skills_list_helper[choice]))
-        else:
-            message('You improved {}.'.format(skills_list_helper[choice]))
-
-        player.class_name.xp = int(player.class_name.xp - skill_cost[choice])
-        SKILLS_LIST[skills_list_helper[choice]][2] += 1
-
-
-    else:
-        message('You don\'t have enough xp for that.')
-
-    tdl.flush()
-    render_all()
-    tdl.flush()
-
 
 
 
@@ -1565,11 +1496,108 @@ def help_menu():
     text = [line.rstrip('\n') for line in open('help.txt')]
     text_window('Help', text, is_file=True)
 
+def level_up_screen():
+    global player
+
+    header = 'Level up screen'
+
+    options = []
+    skills_list_helper = []
+    skill_cost = []
+    
+    for i, skill in enumerate(SKILLS_LIST):
+        skills_list_helper.append(skill)
+        skill_cost.append(SKILLS_LIST[skill][0] + (SKILLS_LIST[skill][0] * SKILLS_LIST[skill][1] * SKILLS_LIST[skill][2]))
+        
+        # Name / Base cost, Multiplier, Current level, Tooltip
+        options.append('{} {} level : {} cost to next : {}'.format(skill,
+                                                                   SKILLS_LIST[skill][3],
+                                                                   SKILLS_LIST[skill][2],
+                                                                   skill_cost[i]))
+
+    options_colors = []
+
+    for i, opt in enumerate(options):
+        if skill_cost[i] <= player.class_name.xp:
+            options_colors.append((255,255,255))
+        else:
+            options_colors.append((50,50,50))
+
+
+    choice = menu(header, options, CONSOLE_WIDTH - 2, options_colors)
+
+    tdl.flush()
+    render_all()
+    tdl.flush()
+
+    if choice is not None:
+        if choice > len(SKILLS_LIST):
+            return
+    else:
+        return
+
+    if options_colors[choice] == (255,255,255):
+        if choice == 0:
+            player.class_name.max_hp += 15
+            player.class_name.hp += 15
+
+        elif choice == 1:
+            player.class_name.max_hp += 5
+            player.class_name.hp += 5
+            player.class_name.defense += 1
+
+        elif choice == 2:
+            player.class_name.max_hp += 5
+            player.class_name.hp += 5
+            player.class_name.melee_dmg += 1
+
+        elif choice == 3:
+            player.class_name.melee_dmg += 3
+
+        elif choice == 4:
+            player.class_name.ranged_dmg += 2
+
+        if SKILLS_LIST[skills_list_helper[choice]][2] == 0:
+            message('You learned {}.'.format(skills_list_helper[choice]))
+        else:
+            message('You improved {}.'.format(skills_list_helper[choice]))
+
+        player.class_name.xp = int(player.class_name.xp - skill_cost[choice])
+        SKILLS_LIST[skills_list_helper[choice]][2] += 1
+
+
+    else:
+        message('You don\'t have enough xp for that.')
+
+    tdl.flush()
+    render_all()
+    tdl.flush()
+
+
+def move_camera(target_x, target_y):
+    x = target_x - DUNGEON_DISPLAY_WIDTH / 2
+    y = target_y - DUNGEON_DISPLAY_HEIGHT / 2
+
+    if x < 0:
+        x = 0
+    if y < 0:
+        y = 0
+    if x > MAP_WIDTH - DUNGEON_DISPLAY_WIDTH - 1:
+        x = MAP_WIDTH - DUNGEON_DISPLAY_WIDTH - 1
+    if y > MAP_HEIGHT - DUNGEON_DISPLAY_HEIGHT - 1:
+        y = MAP_HEIGHT - DUNGEON_DISPLAY_HEIGHT - 1
+
+    return [int(x), int(y)]
 
 def render_all():
     global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count, current_map_level
     visible_tiles = []
 
+    for x in range(DUNGEON_DISPLAY_WIDTH):
+        for y in range(DUNGEON_DISPLAY_HEIGHT):
+            map_console.draw_char(x, y, ' ')
+
+    boundaries = move_camera(player.x, player.y)
 
     # visible_tiles = tdl.map.quickFOV(player.x, player.y, game_map.is_visible_tile(), radius = TORCH_RADIUS, lightWalls = FOV_LIGHT_WALLS)
     visible_tiles_iter = fov_map.compute_fov(player.x, player.y, radius=TORCH_RADIUS, light_walls=FOV_LIGHT_WALLS)
@@ -1579,20 +1607,24 @@ def render_all():
 
     for x in range(DUNGEON_DISPLAY_WIDTH):
         for y in range(DUNGEON_DISPLAY_HEIGHT):
-            if (x, y) in visible_tiles:
-                game_map.map_array[x][y].explored = True
-                map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=VISIBLE_COLORS[game_map.map_array[x][y].ch], bg=game_map.map_array[x][y].bkg_color)
+            
+            true_x = x + boundaries[0]
+            true_y = y + boundaries[1]
+
+            if (true_x, true_y) in visible_tiles:
+                game_map.map_array[true_x][true_y].explored = True
+                map_console.draw_char(x, y, game_map.map_array[true_x][true_y].ch, fg=VISIBLE_COLORS[game_map.map_array[true_x][true_y].ch], bg=game_map.map_array[true_x][true_y].bkg_color)
             else:
-                if game_map.map_array[x][y].explored:
-                    map_console.draw_char(x, y, game_map.map_array[x][y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[x][y].ch], bg=game_map.map_array[x][y].bkg_color)
+                if game_map.map_array[true_x][true_y].explored:
+                    map_console.draw_char(x, y, game_map.map_array[true_x][true_y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[true_x][true_y].ch], bg=game_map.map_array[true_x][true_y].bkg_color)
 
     entity_console.clear()
     # entities
     for entity in entities:
-        entity.draw(visible_tiles)
+        entity.draw(visible_tiles, boundaries)
 
     # player
-    entity_console.draw_char(player.x, player.y, player.ch, fg=player.color, bg=player.bkg_color)
+    player.draw(visible_tiles, boundaries)
 
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
@@ -1662,7 +1694,6 @@ def render_all():
 
 
 
-
 def main_menu():
     global console
 
@@ -1701,8 +1732,6 @@ def main_menu():
 
     elif key.keychar =='3' or key.keychar == 'KP3':
         pass
-
-
 
 def initialize_consoles():
     global console, map_console, panel_console, message_console, entity_console, turn_count
@@ -1810,9 +1839,9 @@ def save_game():
 
 def load_game():
     global game_map, entities, player, game_messages, game_messages_history, game_state
-
+    
     file = shelve.open('save', 'n')
-
+   
     game_map = file['game_map']
     entities = file['entities']
     player = file['player']
@@ -1824,10 +1853,12 @@ def load_game():
     initialize_consoles()
     initialize_fov()
 
+    return True
+
 def main():
     global console
 
-    tdl.set_font('Cheepicus_12x12.png')
+    tdl.set_font('fonts/Kelora_16x16_diagonal.png')
     console = tdl.init(CONSOLE_WIDTH, CONSOLE_HEIGHT)
 
     main_menu()
