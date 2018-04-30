@@ -17,6 +17,8 @@ import sys
 #Useful for the skill list
 from collections import OrderedDict
 
+# Rect
+from tools import *
 
 
 CONSOLE_WIDTH = 90
@@ -68,7 +70,7 @@ HP_COLOR = (((75,255,75), (20,80,20)), ((255,100,0), (75,50,0)), ((255,0,0), (15
 
 MESSAGE_COLORS = {'combat':(255,255,150), 'player_combat':(255,255,200)}
 
-MOVEMENT_KEYS = {'KP5': [0, 0], 'KP2': [0, 1], 'KP1': [-1, 1], 'KP4': [-1, 0], 'KP7': [-1, -1], 'KP8': [0, -1], 'KP9': [1, -1], 'KP6': [1, 0], 'KP3': [1, 1]}
+MOVEMENT_KEYS = {'5': [0, 0], '2': [0, 1], '1': [-1, 1], '4': [-1, 0], '7': [-1, -1], '8': [0, -1], '9': [1, -1], '6': [1, 0], '3': [1, 1]}
 
 MONSTER_CHANCE = {'Swarmer':95, 'Swarmer Alpha':5}
 ITEM_CHANCE = {'Health potion':85, 'Super health potion':5, 'Crowbar':10}
@@ -81,52 +83,6 @@ SKILLS_LIST = OrderedDict([('Meatbag',   [75, 1.5, 0, '(+15HP)']),
                            ('Gunner',    [100, 1.5, 0, '(+2 ranged damage)'])])
 
 MOUSE_COORD = {'x':0, 'y':0}
-
-class Rect:
-    def __init__(self, x, y, w, h):
-        self._x1 = x
-        self._y1 = y
-        self._x2 = x + w
-        self._y2 = y + h
-
-    def _get_x1(self):
-        return self._x1
-
-    def _set_x1(self, x1):
-        self._x1 = x1
-
-    x1 = property(_get_x1, _set_x1)
-
-    def _get_y1(self):
-        return self._y1
-
-    def _set_y1(self, y1):
-        self._y1 = y1
-
-    y1 = property(_get_y1, _set_y1)
-
-    def _get_x2(self):
-        return self._x2
-
-    def _set_x2(self, x2):
-        self._x2 = x2
-
-    x2 = property(_get_x2, _set_x2)
-
-    def _get_y2(self):
-        return self._y2
-
-    def _set_y2(self, y2):
-        self._y2 = y2
-
-    y2 = property(_get_y2, _set_y2)
-
-    def get_center(self):
-        return ((int)((self._x1 + self._x2)/2), (int)((self._y1 + self._y2)/2))
-
-    def intersect(self, other_rect):
-        return (self._x1 <= other_rect.x2 and self._x2 >= other_rect.x1 and
-                self._y1 <= other_rect.y2 and self._y2 >= other_rect.y1)
 
 
 class Tile:
@@ -1287,43 +1243,43 @@ def handle_keys():
 
             return 'exit'
 
-        if user_input.keychar == '?':
+        if user_input.text == '?':
             help_menu()
             return 'didnt_take_turn'
 
-        if user_input.keychar == 'c':
+        if user_input.text == 'c':
             character_stats()
             return 'didnt_take_turn'
 
-        if user_input.keychar == 'l':
+        if user_input.text == 'l':
             level_up_screen()
             return 'didnt_take_turn'
 
         if game_state == 'playing':
 
-            if user_input.key in MOVEMENT_KEYS:
-                player.player_move_attack(MOVEMENT_KEYS[user_input.key])
+            if user_input.text in MOVEMENT_KEYS:
+                player.player_move_attack(MOVEMENT_KEYS[user_input.text])
 
-            elif user_input.keychar is 'g':
+            elif user_input.text is 'g':
                 for entity in entities:
                     if entity._item is not None:
                         if player.distance_to(entity) < 2:
                             entity.item.pick_up()
                             break
 
-            elif user_input.keychar is 'i':
+            elif user_input.text is 'i':
                 selected_item = inventory_menu('inventory')
                 if selected_item is not None:
                     selected_item.use()
                 else:
                     return 'didnt_take_turn'
 
-            elif user_input.keychar is 'f':
+            elif user_input.text is 'f':
                 target = player.class_name.ranged_attack(player.class_name.ranged_dmg)
                 if target is None:
                     return 'didnt_take_turn'
 
-            elif user_input.keychar is '>':
+            elif user_input.text is '>':
                 for elem in entities:
                     if elem.name == 'stairs':
                         if player.x == elem.x and player.y == elem.y:
@@ -1628,7 +1584,7 @@ def render_all():
 
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
-    console.blit(entity_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0, bgalpha=0.0)
+    console.blit(entity_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
     # render player panel
     for x in range(PANEL_WIDTH):
