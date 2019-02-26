@@ -86,7 +86,7 @@ MOUSE_COORD = {'x':0, 'y':0}
 
 
 class Tile:
-    def __init__(self, ch, blocked=True, block_sight=True, color=white, bkg_color = None):
+    def __init__(self, ch, blocked=True, block_sight=True, color=white, bkg_color=None):
         self._ch = ch
         self._explored = False
         self._blocked = blocked
@@ -261,7 +261,7 @@ class Map:
                 y = rn.randint(room.y1, room.y2 - 1)
 
             choice = random_choice(ITEM_CHANCE)
-            
+
             if choice == 'Health potion':
                 item = create_item('Health potion', x, y)
             elif choice == 'Super health potion':
@@ -543,20 +543,20 @@ class Object:
         entities.insert(0, self)
 
     def draw(self, visible_tiles, boundaries):
-        global entity_console, game_map
+        global map_console, game_map
 
         true_x = self._x - boundaries[0]
         true_y = self._y - boundaries[1]
 
         if (self._x, self._y) in visible_tiles:
-            entity_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
+            map_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
         elif self._always_visible and game_map.map_array[self._x][self._y].explored:
-            entity_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
+            map_console.draw_char(true_x, true_y, self._ch, fg=self._color, bg=self._bkg_color)
 
     def force_draw(self):
-        global entity_console
+        global map_console
 
-        entity_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
+        map_console.draw_char(self._x, self._y, self._ch, fg=self._color, bg=self._bkg_color)
 
 
 class BasicClass:
@@ -725,7 +725,7 @@ class BasicClass:
 
     def ranged_attack(self, amount):
         target = target_monster()
-        
+
         if target is not None:
             damage = self._get_ranged_dmg() - target.class_name.defense
         else:
@@ -952,10 +952,10 @@ def check_slot(slot):
     return None
 
 def get_all_equipped(obj):
-    
+
     if obj == player:
         equipped_list = []
-        
+
         for item in obj.class_name.inventory:
             if item.equipement and item.equipement.is_equipped:
                 equipped_list.append(item.equipement)
@@ -998,11 +998,11 @@ def target_monster():
         # If it's a monster, basically
         if entity.ai is not None:
             if (entity.x, entity.y) in visible_tiles:
-                
+
                 wall = False
-                
+
                 path_to_monster = tdl.map.bresenham(player.x, player.y, entity.x, entity.y)
-                
+
                 # If the path is blocked by a wall or a monster, we don't allow the player to shoot at it
                 for x,y in path_to_monster:
                     # Wall
@@ -1013,7 +1013,7 @@ def target_monster():
                         for entity_2 in entities:
                             if (x,y) != (entity.x,entity.y) and (entity_2.x, entity_2.y) == (x,y) and entity_2.blocks:
                                 wall = True
-                
+
                 if not wall:
                     targetable_monsters.append(entity)
 
@@ -1048,17 +1048,17 @@ def target_monster():
             for x,y in path_to_monster:
                 game_map.map_array[x][y].bkg_color = (150,150,150)
 
-            
+
 
             last_entity.bkg_color = Ellipsis
             last_entity.force_draw()
-     
+
             targetable_monsters[current_idx].bkg_color = white
             targetable_monsters[current_idx].force_draw()
-            
+
             render_all()
             tdl.flush()
-            
+
 
             user_input = None
 
@@ -1124,7 +1124,7 @@ def monster_death(monster):
     monster.ai = None
     monster.name = 'Remains of ' + monster.name + '.'
     monster.send_to_back()
-    
+
 
 
 def next_level():
@@ -1144,7 +1144,7 @@ def check_level_up():
     global player
 
     to_level = 0
-    next_level = 100*player.class_name.level  
+    next_level = 100*player.class_name.level
 
     while player.class_name.xp - next_level >= 0:
         to_level += 1
@@ -1193,7 +1193,7 @@ def check_level_up():
                 player.class_name.ranged_dmg += 2
 
         to_level -= 1
-        
+
         tdl.flush()
         render_all()
         tdl.flush()
@@ -1385,7 +1385,7 @@ def inventory_menu(header):
 
             if item.equipement:
                 if item.equipement.is_equipped:
-                    item_name = '[E] ' + item.name                
+                    item_name = '[E] ' + item.name
 
             options.append(item_name)
 
@@ -1460,11 +1460,11 @@ def level_up_screen():
     options = []
     skills_list_helper = []
     skill_cost = []
-    
+
     for i, skill in enumerate(SKILLS_LIST):
         skills_list_helper.append(skill)
         skill_cost.append(SKILLS_LIST[skill][0] + (SKILLS_LIST[skill][0] * SKILLS_LIST[skill][1] * SKILLS_LIST[skill][2]))
-        
+
         # Name / Base cost, Multiplier, Current level, Tooltip
         options.append('{} {} level : {} cost to next : {}'.format(skill,
                                                                    SKILLS_LIST[skill][3],
@@ -1549,21 +1549,21 @@ def render_all():
     global fov_recompute, player, game_map, fov_map, visible_tiles, turn_count, current_map_level
     visible_tiles = []
 
-    for x in range(DUNGEON_DISPLAY_WIDTH):
-        for y in range(DUNGEON_DISPLAY_HEIGHT):
-            map_console.draw_char(x, y, ' ')
+    # for x in range(DUNGEON_DISPLAY_WIDTH):
+    #     for y in range(DUNGEON_DISPLAY_HEIGHT):
+    #         map_console.draw_char(x, y, ' ')
 
+    map_console.clear()
     boundaries = move_camera(player.x, player.y)
 
     # visible_tiles = tdl.map.quickFOV(player.x, player.y, game_map.is_visible_tile(), radius = TORCH_RADIUS, lightWalls = FOV_LIGHT_WALLS)
     visible_tiles_iter = fov_map.compute_fov(player.x, player.y, radius=TORCH_RADIUS, light_walls=FOV_LIGHT_WALLS)
 
-    for tile in visible_tiles_iter:
-        visible_tiles.append(tile)
+    visible_tiles = list(visible_tiles_iter)
 
     for x in range(DUNGEON_DISPLAY_WIDTH):
         for y in range(DUNGEON_DISPLAY_HEIGHT):
-            
+
             true_x = x + boundaries[0]
             true_y = y + boundaries[1]
 
@@ -1574,7 +1574,6 @@ def render_all():
                 if game_map.map_array[true_x][true_y].explored:
                     map_console.draw_char(x, y, game_map.map_array[true_x][true_y].ch, fg=NOT_VISIBLE_COLORS[game_map.map_array[true_x][true_y].ch], bg=game_map.map_array[true_x][true_y].bkg_color)
 
-    entity_console.clear()
     # entities
     for entity in entities:
         entity.draw(visible_tiles, boundaries)
@@ -1583,8 +1582,6 @@ def render_all():
     player.draw(visible_tiles, boundaries)
 
     console.blit(map_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
-
-    console.blit(entity_console, 0, 0, DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT, 0, 0)
 
     # render player panel
     for x in range(PANEL_WIDTH):
@@ -1620,7 +1617,7 @@ def render_all():
 
     panel_console.draw_str(1, PANEL_HEIGHT-1, 'Turn {}'.format(turn_count), fg=(75,75,75))
     panel_console.draw_str(1, PANEL_HEIGHT-2, 'Map level : {}'.format(current_map_level), fg=(150,0,150))
-    
+
 
     for x in range(0, PANEL_WIDTH):
         for y in range(0, PANEL_HEIGHT):
@@ -1668,7 +1665,7 @@ def main_menu():
 
 
     elif key.keychar == '2' or key.keychar == 'KP2':
-        
+
         try:
             load_game()
 
@@ -1680,9 +1677,9 @@ def main_menu():
             console.draw_str(2,5, "No savegame ! Launching new game, press any key to continue")
             tdl.flush()
             key = tdl.event.key_wait()
-            
+
             new_game()
-        
+
         play_game()
 
 
@@ -1690,11 +1687,9 @@ def main_menu():
         pass
 
 def initialize_consoles():
-    global console, map_console, panel_console, message_console, entity_console, turn_count
+    global console, map_console, panel_console, message_console, turn_count
 
     map_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
-
-    entity_console = tdl.Console(DUNGEON_DISPLAY_WIDTH, DUNGEON_DISPLAY_HEIGHT)
 
     panel_console = tdl.Console(PANEL_WIDTH, PANEL_HEIGHT)
     message_console = tdl.Console(MESSAGE_WIDTH, MESSAGE_HEIGHT)
@@ -1723,7 +1718,7 @@ def new_game():
     game_state = 'main_menu'
     game_messages = []
     game_messages_history = []
-  
+
     current_map_level = 1
 
     # Main screen
@@ -1775,9 +1770,9 @@ def play_game():
         render_all()
 
         # Update the window
-        
+
         tdl.flush()
-        
+
 def save_game():
     global game_map, entities, player, game_messages, game_messages_history, game_state, current_map_level
 
@@ -1795,13 +1790,13 @@ def save_game():
 
 def load_game():
     global game_map, entities, player, game_messages, game_messages_history, game_state
-    
+
     file = shelve.open('save', 'n')
-   
+
     game_map = file['game_map']
     entities = file['entities']
     player = file['player']
-    game_messages = file['game_messages'] 
+    game_messages = file['game_messages']
     game_messages_history = file['game_messages_history']
     game_state = file['game_state']
     current_map_level = file['current_map_level']
